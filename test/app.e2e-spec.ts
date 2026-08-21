@@ -4,7 +4,7 @@ import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
 
-describe('AppController (e2e)', () => {
+describe('SafeguardController (e2e)', () => {
   let app: INestApplication<App>;
 
   beforeEach(async () => {
@@ -16,11 +16,32 @@ describe('AppController (e2e)', () => {
     await app.init();
   });
 
-  it('/ (GET)', () => {
+  it('GET / — UI 페이지를 서빙한다', () => {
     return request(app.getHttpServer())
       .get('/')
       .expect(200)
-      .expect('Hello World!');
+      .expect('Content-Type', /html/)
+      .expect((res) => {
+        if (!res.text.includes('대화')) throw new Error('UI 본문이 아님');
+      });
+  });
+
+  it('POST /api/analyze — 잘못된 context는 400', () => {
+    return request(app.getHttpServer())
+      .post('/api/analyze')
+      .send({ rawText: 'x', context: 'invalid', victimName: 'x' })
+      .expect(400);
+  });
+
+  it('POST /api/analyze — 파싱 불가 원문은 400', () => {
+    return request(app.getHttpServer())
+      .post('/api/analyze')
+      .send({
+        rawText: '아무 형식도 아닌 텍스트',
+        context: 'dm',
+        victimName: 'x',
+      })
+      .expect(400);
   });
 
   afterEach(async () => {
