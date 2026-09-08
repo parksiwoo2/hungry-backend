@@ -2,11 +2,11 @@
  * Safe Guard — 대화 분석(#2) + 문서 생성(#4)  [담당: 변경호 / NestJS]
  *
  * 2패스 구조:
- *   1차 선별(AI)   유해 "후보" 수집 + 특정성 + 맥락 노트. 성립 판단 안 함.
+ *   1차 선별(AI)   유해 "구간"(같은 행위를 이루는 메시지 묶음) 수집 + 특정성 + 사실 요약. 성립 판단 안 함.
  *                  애매하면 포함 — 여기서 빠지면 복구 불가, 잘못 들어간 건 2차가 거름.
  *   판례 매칭      팀원 모듈(벡터 DB) — targetText와 가장 가까운 판례 문구 3개.
  *                  준비 전까지 MockPrecedentProvider (precedent-provider.ts).
- *   2차 판단(AI)   후보 + 판례 + 맥락 노트로 유형·정도 확정. 무관 판례는 버리게 지시.
+ *   2차 판단(AI)   구간 원문 + 판례 + 요약으로 유형·정도 확정. 무관 판례는 버리게 지시.
  *   집계·문서      코드. 조문·형량은 law-articles.json(법령 API 수집)에서.
  *
  * 원칙:  의미 판단은 AI가, 숫자 집계·법조항은 코드가.
@@ -57,15 +57,20 @@ export interface AnalyzeInput {
   victimInRoom: boolean; // 피해자가 그 방 구성원인가 (학폭 도달성 요건)
 }
 
-// ── 1차 선별 스키마 ───────────────────────────────────────────────────
-const Candidate = z.object({
-  no: z.number().int().describe('입력에서 매긴 메시지 번호'),
+// ── 1차 선별 스키마 — 단위는 "구간"(같은 행위를 이루는 메시지 묶음) ──────
+const Segment = z.object({
+  messageNos: z
+    .array(z.number().int())
+    .min(1)
+    .describe('구간에 속한 가해 측 발화의 메시지 번호 (오름차순)'),
   victimIdentifiable: z
     .boolean()
     .describe('피해자가 식별되는가 — 이름·2인칭·멘션·맥락 지목 포함'),
-  contextNote: z
+  summary: z
     .string()
-    .describe('2차가 이 메시지만 보고 판단할 수 있게 앞뒤 상황 한 줄'),
+    .describe(
+      '누가 무엇을 어떤 순서로 했는지 사실만 한두 문장. 죄명·유형 단어 금지. 판례 검색 질의로도 쓰임',
+    ),
 });
 const Patterns = z
   .array(
@@ -73,10 +78,10 @@ const Patterns = z
   )
   .describe('대화 전체에서 관찰된 집단 괴롭힘 패턴');
 const ScreeningResult = z.object({
-  candidates: z.array(Candidate),
+  segments: z.array(Segment),
   patterns: Patterns,
 });
-export type ScreenedCandidate = z.infer<typeof Candidate>;
+export type ScreenedSegment = z.infer<typeof Segment>;
 export type Screening = z.infer<typeof ScreeningResult>;
 
 // ── 2차 판단 스키마 ───────────────────────────────────────────────────
@@ -93,7 +98,12 @@ const HarmType = z.enum([
 const Severity = z.enum(['관찰', '주의', '즉시조치']); // 점수 아님(구간)
 
 const Judged = z.object({
-  no: z.number().int().describe('메시지 번호'),
+  messageNos: z
+    .array(z.number().int())
+    .min(1)
+    .describe(
+      '이 판정이 적용되는 구간의 메시지 번호들 (입력 구간의 번호 중에서만)',
+    ),
   harmTypes: z
     .array(HarmType)
     .describe('복수 가능 — 실제로 별개 행위가 성립하는 경우만'),
@@ -114,8 +124,9 @@ export type FlaggedItem = z.infer<typeof Judged>;
 
 // ── 1차 프롬프트: 후보 선별 ───────────────────────────────────────────
 const SYSTEM_SCREEN = `너는 한국 사이버폭력 대화의 1차 선별기다.
-번호가 매겨진 대화 전체를 읽고, 가해로 볼 여지가 있는 메시지를 후보로 수집한다.
-성립 여부의 최종 판단은 다음 단계가 판례를 근거로 수행한다. 너는 고르기만 한다.
+번호가 매겨진 대화 전체를 읽고, 가해로 볼 여지가 있는 메시지를 골라
+같은 행위를 이루는 것끼리 하나의 구간으로 묶어 반환한다.
+성립 여부의 최종 판단은 다음 단계가 판례를 근거로 수행한다. 너는 고르고 묶기만 한다.
 
 ## 원칙
 - 여기서 빠진 메시지는 이후 단계에 전달되지 않는다. 애매하면 포함하라.
@@ -146,38 +157,55 @@ const SYSTEM_SCREEN = `너는 한국 사이버폭력 대화의 1차 선별기다
 - 다수에게 특정인 공격을 지시하거나 실행을 보조하는 발언
 - 관찰된 집단 패턴(카톡감옥 등)을 구성하는 발언
 
-## 각 후보에 붙이는 것
+## 구간으로 묶는 규칙
+- 구간 하나 = 행위 하나. 같은 목적으로 이어지는 발화들을 한 구간에 넣어라.
+  예: 심부름 요구 → 거절 무시 → 불이익 암시 → 요구 가중은 며칠에 걸쳐도 한 구간이다.
+- 서로 다른 행위(예: 외모 조롱과 금품 요구)는 다른 구간으로 나눠라.
+- 단독 발화도 구간 하나다.
+- messageNos에는 가해 측 발화의 번호만 넣어라. 피해자의 발화는 넣지 말되,
+  거부 의사·해명 같은 흐름 판단에는 사용하라.
+- 동조성 반응(웃음·동의)은 그것이 따라붙은 발화와 같은 구간에 넣어라.
+- 한 메시지는 하나의 구간에만 속한다. 구간은 첫 메시지 번호 순으로 정렬하라.
+
+## 각 구간에 붙이는 것
+- messageNos: 구간에 속한 가해 발화의 번호들 (오름차순)
 - victimIdentifiable: 피해자가 식별되는가.
   이름·2인칭·멘션뿐 아니라 "어떤 애가" 식의 맥락 지목도 식별로 본다.
-- contextNote: 다음 단계는 대화 전체를 보지 못한다. 이 메시지만 보고도 판단할 수
-  있도록 앞뒤 상황을 한 줄로 적어라 — 직전의 거부 의사, 쌍방 언쟁 여부, 반복 회차 등.
+- summary: 이 구간에서 누가 무엇을 어떤 순서로 했는지 한두 문장으로 요약하라.
+  다음 단계는 대화 전체를 보지 못하므로 직전의 거부 의사, 쌍방 언쟁 여부, 반복 회차,
+  상대의 반응을 담아라. 이 요약은 판례 검색 질의로도 쓰이니 행위·수단·반복을 구체적으로 적어라.
   죄명·유형 단어(협박, 모욕, 셔틀, 카톡감옥 등)를 쓰지 마라. 관찰된 사실만 기술하라.
-  판정은 다음 단계의 일이고, 네 노트에 판정이 섞이면 다음 단계가 그것에 끌려간다.
+  판정은 다음 단계의 일이고, 네 요약에 판정이 섞이면 다음 단계가 그것에 끌려간다.
 
 ## patterns — 대화 전체에서 관찰된 집단 괴롭힘 패턴
 - 카톡감옥: 피해자가 나간 뒤 재초대 2회 이상 / 방폭: 초대 직후 다수 동시 퇴장
 - 떼카: 3인 이상이 단시간에 1인 집중 공격 / 셔틀: 일방적 심부름·금품 요구의 반복
 - 반톡배제·은따·저격글
-- 입·퇴장 시스템 이벤트는 후보로 넣지 말고 패턴 판단과 contextNote에 반영하라.`;
+- 입·퇴장 시스템 이벤트는 구간에 넣지 말고 패턴 판단과 summary에 반영하라.`;
 
 // ── 2차 프롬프트: 판례 근거 판단 ──────────────────────────────────────
-const SYSTEM_JUDGE = `너는 사이버폭력 후보 메시지의 2차 판단자다.
-1차가 넉넉히 수집한 후보 각각에, 벡터 검색으로 찾은 인접 판례가 최대 3개 붙어 있다.
-각 후보에는 앞뒤 원문(▶ 표시가 해당 발언)과 1차의 맥락 노트가 함께 있다.
-맥락 노트는 참고일 뿐이다 — 판단은 원문을 직접 읽고 하라.
+const SYSTEM_JUDGE = `너는 사이버폭력 후보 구간의 2차 판단자다.
+1차가 넉넉히 수집한 구간(같은 행위를 이루는 메시지 묶음) 각각에,
+벡터 검색으로 찾은 인접 판례가 최대 3개 붙어 있다.
+각 구간에는 원문이 함께 있다 — ▶ 표시가 구간에 속한 발화이고, 표시 없는 줄은
+그 사이·전후의 피해자 응답 등 맥락이다. 1차의 요약은 참고일 뿐이다 — 판단은 원문을 직접 읽고 하라.
 
 ## 판례 사용 규칙
 - 판례는 유사도 순 후보일 뿐 적용을 보증하지 않는다. 사안과 무관하면 버려라.
 - 실제 판단의 근거로 삼은 판례만 appliedPrecedentIds에 넣어라. 없으면 빈 배열.
-- 적합한 판례가 없어도 명백히 유해한 발언은 아래 기준으로 판단하라.
+- 적합한 판례가 없어도 명백히 유해한 행위는 아래 기준으로 판단하라.
 - 제공된 사건번호 외의 판례를 지어내지 마라.
 
-## 후보 탈락
-1차는 애매한 것을 모두 포함했다. 유해성이 인정되지 않는 후보는 반환하지 마라.
+## 구간 탈락·분리
+- 1차는 애매한 것을 모두 포함했다. 유해성이 인정되지 않는 구간은 반환하지 마라.
+- 한 구간이 실제로는 별개 행위 둘이면 messageNos를 나눠 두 항목으로 반환해도 된다.
+  반대로 서로 다른 구간을 합치지는 마라.
+- 반환하는 messageNos는 입력 구간의 번호 중에서만 고르고, 구간 안의 일부 발화가
+  유해하지 않으면 그 번호는 빼라.
 
 ## 판단 기준
-- 복수 태그는 실제로 별개 행위가 성립하는 경우만.
-  모욕과 언어폭력을 같은 메시지에 동시에 붙이지 마라 —
+- 유형은 구간 전체의 행위에 대해 판정한다. 복수 태그는 실제로 별개 행위가 성립하는 경우만.
+  모욕과 언어폭력을 같은 구간에 동시에 붙이지 마라 —
   언어폭력은 모욕·명예훼손 중 어느 쪽인지 확정하기 어려운 경우에만 쓴다.
 - 협박: 구체적 해악의 고지가 있어야 한다. 압박·재촉·조롱·퇴장 금지 명령만으로는
   협박이 아니다. 말다툼 중 즉발적 분노 표시는 협박이 아니나, 거부 의사를 밝힌
@@ -190,7 +218,8 @@ const SYSTEM_JUDGE = `너는 사이버폭력 후보 메시지의 2차 판단자�
   사람의 관점에서 판단한다. 분노와 결합된 성적 조롱도 성희롱이다.
 - 집단따돌림: 가해자 2명 이상 + 지속·반복이 필요하다.
   동조성 반응(웃음·동의)도 구성 발화로 본다.
-- severity 구간: 관찰(경미·동조성) / 주의(지목 비하·반복 조짐) /
+- 갈취·강요: 요구와 해악 고지가 한 구간 안에서 결합돼 있으면 그 결합 자체를 평가하라.
+- severity는 구간 단위: 관찰(경미·동조성) / 주의(지목 비하·반복 조짐) /
   즉시조치(해악 고지·금품 요구·성적 내용·신상 언급·거부 의사 후 재접근·패드립·장애 비하)
 - "신고할 정도는 아니다" 같은 판정 표현을 쓰지 마라. 상태만 기술하라.
 - 이 분석은 참고용이며 법적 판단이 아니다.`;
@@ -325,20 +354,50 @@ export class SafeguardAnalysisService {
     return response.parsed_output!;
   }
 
-  /** 후보 → 판례 모듈 입력 계약 (입출력 바디 형태.pdf) */
+  /** 구간 식별자 — 계약의 targetMessageId. 번호 나열이라 그 자체로 역추적 가능 */
+  static segmentId(messageNos: number[]): string {
+    return messageNos.join(',');
+  }
+
+  /**
+   * 구간 → 판례 모듈 입력 계약 (입출력 바디 형태.pdf)
+   *
+   * 계약 형태는 그대로다 — 타깃 하나가 메시지 하나에서 구간 하나로 바뀌었을 뿐.
+   * targetText는 "1차의 사실 요약 + 구간 원문"이다. 요약은 구어 원문보다 판시사항 문체에
+   * 가까워 벡터 검색 질의로 유리하고, 원문은 검색 근거의 손실을 막는다. 문자열 하나라
+   * 벡터 모듈 쪽은 손댈 게 없다.
+   */
   buildAnalysisTargets(
     input: AnalyzeInput,
     screening: Screening,
   ): AnalysisTarget[] {
-    return screening.candidates.map((c) => ({
-      targetMessageId: String(c.no),
-      targetText: input.messages[c.no - 1].text,
-      legalContext: {
-        isGroupChat: input.context !== 'dm', //     코드가 채움 (방 정보)
-        audienceCount: input.participantCount, //   코드가 채움 (방 정보)
-        victimIdentifiable: c.victimIdentifiable, // 1차 AI가 채움 (특정성)
-      },
-    }));
+    return screening.segments.map((seg) => {
+      const lines = seg.messageNos
+        .map((no) => input.messages[no - 1])
+        .filter((m): m is ChatMessage => !!m && !m.systemEvent)
+        .map((m) => m.text);
+      return {
+        targetMessageId: SafeguardAnalysisService.segmentId(seg.messageNos),
+        targetText: [seg.summary, ...lines].join('\n'),
+        legalContext: {
+          isGroupChat: input.context !== 'dm', //       코드가 채움 (방 정보)
+          audienceCount: input.participantCount, //     코드가 채움 (방 정보)
+          victimIdentifiable: seg.victimIdentifiable, // 1차 AI가 채움 (특정성)
+        },
+      };
+    });
+  }
+
+  /**
+   * AI가 낸 메시지 번호 정리 — 범위 밖·중복 제거, 오름차순. 비면 구간 자체를 버린다.
+   * (구조화 출력이라 형식은 보장되지만 번호의 실재 여부까지는 스키마가 못 막는다)
+   */
+  private sanitizeNos(nos: number[], total: number): number[] {
+    return [
+      ...new Set(
+        nos.filter((n) => Number.isInteger(n) && n >= 1 && n <= total),
+      ),
+    ].sort((a, b) => a - b);
   }
 
   /** 메시지 한 줄 표기 — 원문 윈도우용 */
@@ -361,11 +420,12 @@ export class SafeguardAnalysisService {
   }
 
   /**
-   * 2차 입력 직렬화 — 판례 사전(중복 제거) + 후보별 원문 윈도우·맥락·판례 ID
+   * 2차 입력 직렬화 — 판례 사전(중복 제거) + 구간별 원문 범위·요약·판례 ID
    *
-   * 원문 윈도우(±2)를 함께 주는 이유: 1차의 contextNote는 해석이라
-   * 2차가 그 해석에 끌려갈 수 있다(앵커링). 해석되지 않은 원문을 같이 줘서
-   * 2차가 맥락을 스스로 확인하게 한다.
+   * 구간의 첫 발화 앞 1줄부터 마지막 발화 뒤 1줄까지 원문을 통째로 준다.
+   * ▶ 표시가 구간 소속 발화, 나머지는 사이의 피해자 응답 등 맥락.
+   * 1차의 summary는 해석이라 2차가 끌려갈 수 있어(앵커링) 원문을 함께 주고
+   * "요약은 참고일 뿐"으로 못 박는다.
    */
   private judgeContent(
     input: AnalyzeInput,
@@ -380,22 +440,28 @@ export class SafeguardAnalysisService {
       .map(([id, gist]) => `${id}: ${gist}`)
       .join('\n');
 
-    const items = screening.candidates
-      .map((c) => {
-        const t = byId.get(String(c.no));
-        const from = Math.max(0, c.no - 1 - 2);
-        const to = Math.min(input.messages.length, c.no - 1 + 3);
-        const window = input.messages
+    const items = screening.segments
+      .map((seg) => {
+        const t = byId.get(SafeguardAnalysisService.segmentId(seg.messageNos));
+        const inSeg = new Set(seg.messageNos);
+        const first = Math.min(...seg.messageNos);
+        const last = Math.max(...seg.messageNos);
+        const from = Math.max(0, first - 2); // 첫 발화 앞 1줄부터
+        const to = Math.min(input.messages.length, last + 1); // 마지막 발화 뒤 1줄까지
+        const span = input.messages
           .slice(from, to)
           .map((m, i) =>
-            this.formatLine(m, from + i + 1, from + i + 1 === c.no),
+            this.formatLine(m, from + i + 1, inSeg.has(from + i + 1)),
           )
           .join('\n');
+        const label = seg.messageNos
+          .map((n) => String(n).padStart(4, '0'))
+          .join(',');
         return [
-          `[${String(c.no).padStart(4, '0')}] 피해자 식별: ${c.victimIdentifiable ? '예' : '아니오'}` +
+          `[구간 ${label}] 피해자 식별: ${seg.victimIdentifiable ? '예' : '아니오'}` +
             ` · 판례 후보: ${t?.matchedPrecedentIds.join(', ') || '없음'}`,
-          window,
-          `맥락: ${c.contextNote}`,
+          span,
+          `요약: ${seg.summary}`,
         ].join('\n');
       })
       .join('\n\n');
@@ -409,7 +475,7 @@ export class SafeguardAnalysisService {
       `[판례 사전 — 벡터 검색 결과]`,
       dict || '(없음)',
       ``,
-      `[후보 목록]`,
+      `[후보 구간 목록]`,
       items,
     ].join('\n');
   }
@@ -473,19 +539,33 @@ export class SafeguardAnalysisService {
       opts.anonymize === false ? { input, map: {} } : anonymizeInput(input);
 
     onStage('screen');
-    const screening = await this.screen(masked);
-    onStage('screen_done', { candidates: screening.candidates.length });
+    const raw = await this.screen(masked);
+    const total = input.messages.length;
+    const screening: Screening = {
+      patterns: raw.patterns,
+      segments: raw.segments
+        .map((seg) => ({
+          ...seg,
+          messageNos: this.sanitizeNos(seg.messageNos, total),
+        }))
+        .filter((seg) => seg.messageNos.length > 0)
+        .sort((a, b) => a.messageNos[0] - b.messageNos[0]),
+    };
+    onStage('screen_done', {
+      candidates: screening.segments.length,
+      messages: screening.segments.reduce((n, s) => n + s.messageNos.length, 0),
+    });
     const patterns = [...new Set([...screening.patterns, ...codePatterns])];
 
     const unmaskedScreening: Screening = {
       ...screening,
-      candidates: screening.candidates.map((c) => ({
-        ...c,
-        contextNote: deanonymize(c.contextNote, map),
+      segments: screening.segments.map((seg) => ({
+        ...seg,
+        summary: deanonymize(seg.summary, map),
       })),
     };
 
-    if (screening.candidates.length === 0) {
+    if (screening.segments.length === 0) {
       return {
         flagged: [],
         patterns,
@@ -500,14 +580,19 @@ export class SafeguardAnalysisService {
     });
 
     onStage('judge');
-    const { flagged } = await this.judge(masked, screening, matched);
+    const judged = await this.judge(masked, screening, matched);
+    const flagged = judged.flagged
+      .map((f) => ({
+        ...f,
+        messageNos: this.sanitizeNos(f.messageNos, total),
+        reason: deanonymize(f.reason, map),
+      }))
+      .filter((f) => f.messageNos.length > 0)
+      .sort((a, b) => a.messageNos[0] - b.messageNos[0]);
     onStage('judge_done', { flagged: flagged.length });
 
     return {
-      flagged: flagged.map((f) => ({
-        ...f,
-        reason: deanonymize(f.reason, map),
-      })),
+      flagged,
       patterns,
       trace: { screening: unmaskedScreening, matched },
     };
@@ -525,14 +610,19 @@ export class SafeguardAnalysisService {
     };
     if (flagged.length === 0) return empty;
 
-    const times = flagged.map((f) => messages[f.no - 1].time);
+    // 시각·발신자는 구간에 속한 메시지 전부에서, 유형·정도는 구간 단위로 센다
+    const times = flagged.flatMap((f) =>
+      f.messageNos.map((no) => messages[no - 1].time),
+    );
     const typeCounts: Record<string, number> = {};
     const attackerCounts: Record<string, number> = {};
 
     for (const f of flagged) {
       for (const t of f.harmTypes) typeCounts[t] = (typeCounts[t] ?? 0) + 1;
-      const sender = messages[f.no - 1].sender;
-      attackerCounts[sender] = (attackerCounts[sender] ?? 0) + 1;
+      for (const no of f.messageNos) {
+        const sender = messages[no - 1].sender;
+        attackerCounts[sender] = (attackerCounts[sender] ?? 0) + 1;
+      }
     }
 
     // 반복성: 세션(같은 날) 단위로 셈 — 3시간 내 연속 전송은 1건 (대법원 2023도5814)
@@ -583,10 +673,21 @@ export class SafeguardAnalysisService {
 
     // [본문 — 피해별 항목]
     for (const f of flagged) {
-      const src = messages[f.no - 1];
+      const srcs = f.messageNos.map((no) => messages[no - 1]);
+      const first = srcs[0];
+      const last = srcs[srcs.length - 1];
+      const senders = [...new Set(srcs.map((m) => m.sender))].join(', ');
+      const head =
+        srcs.length === 1
+          ? `■ ${first.time} · ${first.sender}`
+          : `■ ${first.time} ~ ${last.time} · ${senders} (메시지 ${srcs.length}개)`;
       const block = [
-        `■ ${src.time} · ${src.sender}`,
-        `  "${src.text}"`,
+        head,
+        ...srcs.map((m) =>
+          srcs.length === 1
+            ? `  "${m.text}"`
+            : `  [${m.time.slice(5, 16)}] ${m.sender}: "${m.text}"`,
+        ),
         `  · 유형: ${f.harmTypes.join(', ')}`,
         `  · 정도: ${f.severity}`,
       ];

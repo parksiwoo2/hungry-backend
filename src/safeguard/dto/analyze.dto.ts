@@ -32,7 +32,7 @@ export class AnalyzeDto {
 class ResultFlaggedDto {
   // 주의: whitelist:true 는 "검증 데코레이터가 있는" 필드만 통과시킨다.
   // @Type 만 붙이면 스트립되므로 모든 필드에 검증 데코레이터가 필요하다.
-  @IsInt() @Type(() => Number) no!: number;
+  @IsArray() @IsInt({ each: true }) @Type(() => Number) messageNos!: number[];
   @IsArray() @IsString({ each: true }) harmTypes!: string[];
   @IsString() severity!: string;
   @IsString() reason!: string;

@@ -342,6 +342,8 @@
   .item.s2 .sev { background: var(--sev-2-soft); color: var(--sev-2); }
   .item.s1 .sev { background: var(--sev-1-soft); color: var(--sev-1); }
   .item .msg { font-size: 15px; font-weight: 600; margin: 7px 0 6px; }
+  .item .msg.seg { font-weight: 500; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+  .item .qmeta { color: var(--ink-3); font-size: 11.5px; font-weight: 600; margin-right: 6px; }
   .item .types { font-size: 12.5px; color: var(--accent); font-weight: 700; margin-bottom: 5px; }
   .item .why { font-size: 13px; color: var(--ink-2); }
 
@@ -814,7 +816,7 @@ function renderResult() {
     return;
   }
 
-  const times = flagged.map((f) => msgs[f.no - 1].time).sort();
+  const times = flagged.flatMap((f) => f.messageNos.map((no) => msgs[no - 1].time)).sort();
   const days = new Set(times.map((t) => t.slice(0, 10))).size;
   $("rCount").style.fontSize = "";
   $("rCount").innerHTML = flagged.length + '<small> 건의 피해 확인</small>';
@@ -838,17 +840,26 @@ function renderResult() {
     : '<span class="stat-chip">해당 없음</span>';
 
   const senderCount = {};
-  flagged.forEach((f) => { const s = msgs[f.no - 1].sender; senderCount[s] = (senderCount[s] || 0) + 1; });
+  flagged.forEach((f) => f.messageNos.forEach((no) => { const s = msgs[no - 1].sender; senderCount[s] = (senderCount[s] || 0) + 1; }));
   $("senderChips").innerHTML = Object.entries(senderCount).sort((a, b) => b[1] - a[1]).map(([k, v]) =>
     '<span class="stat-chip">' + esc(k) + ' <b class="num">' + v + "</b></span>").join("");
 
   $("listLabel").textContent = "피해 내역 " + flagged.length + "건";
   $("itemList").innerHTML = flagged.map((f) => {
-    const m = msgs[f.no - 1];
+    const ms = f.messageNos.map((no) => msgs[no - 1]);
+    const first = ms[0], last = ms[ms.length - 1];
+    const senders = [...new Set(ms.map((m) => m.sender))].map(esc).join(", ");
+    const when = ms.length === 1
+      ? first.time.replace("T", " ") + " · " + esc(first.sender)
+      : first.time.replace("T", " ") + " ~ " + last.time.slice(5).replace("T", " ") + " · " + senders + " · " + ms.length + "개";
+    const quote = ms.length === 1
+      ? '<div class="msg">“' + esc(first.text) + "”</div>"
+      : '<div class="msg seg">' + ms.map((m) =>
+          '<div><span class="qmeta num">' + m.time.slice(5, 16).replace("T", " ") + " " + esc(m.sender) + "</span>" + esc(m.text) + "</div>").join("") + "</div>";
     return '<div class="item ' + SEV[f.severity][0] + '">' +
-      '<div class="head num">' + m.time.replace("T", " ") + " · " + esc(m.sender) +
+      '<div class="head num">' + when +
       '<span class="sev">' + f.severity + "</span></div>" +
-      '<div class="msg">“' + esc(m.text) + "”</div>" +
+      quote +
       '<div class="types">' + f.harmTypes.join(" · ") + "</div>" +
       '<div class="why">' + esc(f.reason) + "</div></div>";
   }).join("");

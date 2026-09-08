@@ -155,6 +155,7 @@ export class ReportPdfService implements OnModuleDestroy {
   .sev.주의 { background: #e8a33d; color: #fff; }
   .sev.관찰 { background: #e5e5e5; color: #444; }
 
+  .qmeta { color: #888; font-size: 8.5pt; font-variant-numeric: tabular-nums; margin-right: 1.5mm; }
   blockquote { margin: 0 0 2mm; padding: 2mm 3mm; background: #fafafa;
                border: 1px solid #eee; border-radius: 2px; font-size: 10pt; }
   .tags { font-size: 9pt; color: #444; margin-bottom: 1.5mm; }
@@ -224,7 +225,24 @@ ${legal ? this.renderTracks(isDm) : ''}
     isDm: boolean,
     legal: boolean,
   ): string {
-    const s = messages[f.no - 1];
+    const srcs = f.messageNos.map((no) => messages[no - 1]);
+    const first = srcs[0];
+    const last = srcs[srcs.length - 1];
+    const senders = [...new Set(srcs.map((m) => m.sender))].join(', ');
+    const when =
+      srcs.length === 1
+        ? `${first.time} · ${first.sender}`
+        : `${first.time} ~ ${last.time} · ${senders} · 메시지 ${srcs.length}개`;
+    // 구간이면 발화마다 한 줄씩 — 시각·발신자를 붙여 어느 메시지인지 알 수 있게
+    const quote =
+      srcs.length === 1
+        ? this.esc(first.text)
+        : srcs
+            .map(
+              (m) =>
+                `<div><span class="qmeta">${this.esc(m.time.slice(5, 16))} ${this.esc(m.sender)}</span> ${this.esc(m.text)}</div>`,
+            )
+            .join('');
     const laws = legal ? this.renderLaws(f.harmTypes, isDm) : '';
     const reason = !legal
       ? `<div class="reason">${this.esc(f.reason)}</div>`
@@ -232,10 +250,10 @@ ${legal ? this.renderTracks(isDm) : ''}
 
     return `<div class="item ${f.severity === '즉시조치' ? 'urgent' : ''}">
   <div class="head">
-    <span class="when">${this.esc(s.time)} · ${this.esc(s.sender)}</span>
+    <span class="when">${this.esc(when)}</span>
     <span class="sev ${f.severity}">${f.severity}</span>
   </div>
-  <blockquote>${this.esc(s.text)}</blockquote>
+  <blockquote>${quote}</blockquote>
   <div class="tags">${this.esc((f.harmTypes as string[]).join(', '))}</div>
   ${reason}${laws}
 </div>`;
