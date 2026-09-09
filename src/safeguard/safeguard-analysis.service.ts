@@ -14,7 +14,7 @@
  *
  * deps: npm i @anthropic-ai/sdk zod
  */
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
@@ -72,10 +72,17 @@ const Segment = z.object({
       '누가 무엇을 어떤 순서로 했는지 사실만 한두 문장. 죄명·유형 단어 금지. 판례 검색 질의로도 쓰임',
     ),
 });
+const PatternName = z.enum([
+  '떼카',
+  '카톡감옥',
+  '방폭',
+  '반톡배제',
+  '은따',
+  '셔틀',
+  '저격글',
+]);
 const Patterns = z
-  .array(
-    z.enum(['떼카', '카톡감옥', '방폭', '반톡배제', '은따', '셔틀', '저격글']),
-  )
+  .array(PatternName)
   .describe('대화 전체에서 관찰된 집단 괴롭힘 패턴');
 const ScreeningResult = z.object({
   segments: z.array(Segment),
@@ -117,6 +124,10 @@ const Judged = z.object({
 });
 const JudgmentResult = z.object({ judged: z.array(Judged) });
 export type FlaggedItem = z.infer<typeof Judged>;
+
+// 모델이 enum 밖 값을 낼 때 걷어내기 위한 허용 집합 (callStructured 참고)
+const HARM_SET = new Set<string>(HarmType.options);
+const PATTERN_SET = new Set<string>(PatternName.options);
 
 // ── 법 조항 매핑 ─────────────────────────────────────────────────────
 // 형량·조문 원문은 law-articles.json(법령 API 수집)에서 읽는다.
@@ -238,6 +249,7 @@ interface Summary {
 @Injectable()
 export class SafeguardAnalysisService {
   /** 지연 초기화 — 부팅·테스트 시 API 키가 없어도 모듈이 뜨고, 첫 분석 요청 때 검증된다 */
+  private readonly logger = new Logger(SafeguardAnalysisService.name);
   private _client?: Anthropic;
   private get client(): Anthropic {
     return (this._client ??= new Anthropic()); // ANTHROPIC_API_KEY 환경변수
@@ -336,22 +348,87 @@ export class SafeguardAnalysisService {
     return [...found];
   }
 
-  /** 1차 선별 — 후보 수집 + 특정성 + 맥락 노트. 가볍게(effort low) */
-  async screen(input: AnalyzeInput): Promise<Screening> {
-    const response = await this.client.messages.parse({
+  /**
+   * 구조화 출력 호출. SDK의 parse()는 값 하나만 스키마를 벗어나도 전체를 던지는데,
+   * 실측(2026-09-09)에서 2차가 enum 밖 harmType을 한 번 냈다. 직접 파싱해서
+   * enum 배열의 위반 값만 걷어내고 나머지는 그대로 검증한다. 그래도 어긋나면 던진다.
+   */
+  private async callStructured<S extends z.ZodType>(
+    label: string,
+    schema: S,
+    system: string,
+    content: string,
+    effort: 'low' | 'medium',
+  ): Promise<z.infer<S>> {
+    const response = await this.client.messages.create({
       model: MODEL,
       max_tokens: 8000,
-      system: SYSTEM_SCREEN,
-      messages: [{ role: 'user', content: this.numberConversation(input) }],
-      output_config: {
-        format: zodOutputFormat(ScreeningResult),
-        effort: 'low',
-      },
+      system,
+      messages: [{ role: 'user', content }],
+      output_config: { format: zodOutputFormat(schema), effort },
     });
     if (response.stop_reason === 'refusal') {
-      throw new Error('1차 선별이 거부됨(안전 분류). 입력을 확인하세요.');
+      throw new Error(`${label}이 거부됨(안전 분류). 입력을 확인하세요.`);
     }
-    return response.parsed_output!;
+    const raw = response.content
+      .flatMap((b) => (b.type === 'text' ? [b.text] : []))
+      .join('');
+    const cleaned = this.dropInvalidEnumValues(label, JSON.parse(raw));
+    const parsed = schema.safeParse(cleaned);
+    if (!parsed.success) {
+      const issues = parsed.error.issues
+        .map((i) => `${i.path.join('.')}: ${i.message}`)
+        .join('; ');
+      throw new Error(`${label} 출력이 스키마와 다름 — ${issues}`);
+    }
+    return parsed.data;
+  }
+
+  /** patterns·harmTypes 배열에서 정의 밖 값을 제거. 유형이 하나도 안 남은 판정은 버린다 */
+  private dropInvalidEnumValues(label: string, value: unknown): unknown {
+    if (!value || typeof value !== 'object') return value;
+    const v = value as Record<string, unknown>;
+    const keep = (
+      arr: unknown,
+      allowed: Set<string>,
+      what: string,
+    ): unknown => {
+      if (!Array.isArray(arr)) return arr;
+      const list = arr as unknown[];
+      const bad = list.filter((x) => !allowed.has(String(x)));
+      if (bad.length) {
+        this.logger.warn(`${label}: 정의 밖 ${what} 제거 — ${bad.join(', ')}`);
+      }
+      return list.filter((x) => allowed.has(String(x)));
+    };
+    if ('patterns' in v) v.patterns = keep(v.patterns, PATTERN_SET, '패턴');
+    if (Array.isArray(v.judged)) {
+      v.judged = v.judged.filter((j: unknown) => {
+        if (!j || typeof j !== 'object') return true; // 스키마 검증에 맡김
+        const item = j as Record<string, unknown>;
+        item.harmTypes = keep(item.harmTypes, HARM_SET, '유형');
+        const empty =
+          Array.isArray(item.harmTypes) && item.harmTypes.length === 0;
+        if (empty) {
+          this.logger.warn(
+            `${label}: 유형이 남지 않은 판정 제외 — 구간 ${String(item.messageNos)}`,
+          );
+        }
+        return !empty;
+      });
+    }
+    return v;
+  }
+
+  /** 1차 선별 — 구간 묶음 + 특정성 + 사실 요약. 가볍게(effort low) */
+  async screen(input: AnalyzeInput): Promise<Screening> {
+    return this.callStructured(
+      '1차 선별',
+      ScreeningResult,
+      SYSTEM_SCREEN,
+      this.numberConversation(input),
+      'low',
+    );
   }
 
   /** 구간 식별자 — 계약의 targetMessageId. 번호 나열이라 그 자체로 역추적 가능 */
@@ -486,26 +563,15 @@ export class SafeguardAnalysisService {
     screening: Screening,
     matched: PrecedentMatchOutput,
   ): Promise<{ flagged: FlaggedItem[]; patterns: string[] }> {
-    const response = await this.client.messages.parse({
-      model: MODEL,
-      max_tokens: 8000,
-      system: SYSTEM_JUDGE,
-      messages: [
-        { role: 'user', content: this.judgeContent(input, screening, matched) },
-      ],
-      output_config: {
-        format: zodOutputFormat(JudgmentResult),
-        effort: 'medium',
-      },
-    });
-    if (response.stop_reason === 'refusal') {
-      throw new Error('2차 판단이 거부됨(안전 분류). 입력을 확인하세요.');
-    }
+    const out = await this.callStructured(
+      '2차 판단',
+      JudgmentResult,
+      SYSTEM_JUDGE,
+      this.judgeContent(input, screening, matched),
+      'medium',
+    );
     // 패턴은 대화 전체를 본 1차의 판단을 그대로 쓴다
-    return {
-      flagged: response.parsed_output!.judged,
-      patterns: screening.patterns,
-    };
+    return { flagged: out.judged, patterns: screening.patterns };
   }
 
   /**
