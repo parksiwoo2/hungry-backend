@@ -37,7 +37,7 @@ export type ChatContext =
   | 'large_group' //  다수·공적 단톡(6인+, 학급·직장) — 공연성 ○
   | 'public'; //      공개 게시판·SNS — 공연성 ○
 
-/** 시스템 이벤트 — 방폭·카톡감옥은 텍스트에 욕설이 0건이라 이게 없으면 탐지 불가 */
+/** 시스템 이벤트 — 방폭은 텍스트에 욕설이 0건이라 이게 없으면 탐지 불가 */
 export type SystemEventKind = 'join' | 'leave' | 'invite' | 'kick' | 'delete';
 
 export interface ChatMessage {
@@ -74,7 +74,6 @@ const Segment = z.object({
 });
 const PatternName = z.enum([
   '떼카',
-  '카톡감옥',
   '방폭',
   '반톡배제',
   '은따',
@@ -166,7 +165,7 @@ const SYSTEM_SCREEN = `너는 한국 사이버폭력 대화의 1차 선별기다
   가해자만 웃고 대상자는 웃지 않으면 조롱이다.
 - 응답 없는 상대에 대한 연속 전송, 심야의 반복
 - 다수에게 특정인 공격을 지시하거나 실행을 보조하는 발언
-- 관찰된 집단 패턴(카톡감옥 등)을 구성하는 발언
+- 관찰된 집단 패턴(떼카·셔틀 등)을 구성하는 발언
 
 ## 구간으로 묶는 규칙
 - 구간 하나 = 행위 하나. 같은 목적으로 이어지는 발화들을 한 구간에 넣어라.
@@ -185,11 +184,11 @@ const SYSTEM_SCREEN = `너는 한국 사이버폭력 대화의 1차 선별기다
 - summary: 이 구간에서 누가 무엇을 어떤 순서로 했는지 한두 문장으로 요약하라.
   다음 단계는 대화 전체를 보지 못하므로 직전의 거부 의사, 쌍방 언쟁 여부, 반복 회차,
   상대의 반응을 담아라. 이 요약은 판례 검색 질의로도 쓰이니 행위·수단·반복을 구체적으로 적어라.
-  죄명·유형 단어(협박, 모욕, 셔틀, 카톡감옥 등)를 쓰지 마라. 관찰된 사실만 기술하라.
+  죄명·유형 단어(협박, 모욕, 셔틀 등)를 쓰지 마라. 관찰된 사실만 기술하라.
   판정은 다음 단계의 일이고, 네 요약에 판정이 섞이면 다음 단계가 그것에 끌려간다.
 
 ## patterns — 대화 전체에서 관찰된 집단 괴롭힘 패턴
-- 카톡감옥: 피해자가 나간 뒤 재초대 2회 이상 / 방폭: 초대 직후 다수 동시 퇴장
+- 방폭: 피해자 초대 직후 다수 동시 퇴장
 - 떼카: 3인 이상이 단시간에 1인 집중 공격 / 셔틀: 일방적 심부름·금품 요구의 반복
 - 반톡배제·은따·저격글
 - 입·퇴장 시스템 이벤트는 구간에 넣지 말고 패턴 판단과 summary에 반영하라.`;
@@ -259,7 +258,7 @@ export class SafeguardAnalysisService {
   /** 판례 매칭 모듈(벡터 DB) 연결 지점 — 팀원 구현이 오면 이 필드를 교체 */
   private readonly precedents: PrecedentProvider = new NoopPrecedentProvider();
 
-  /** 대화에 번호 매기기 — 시스템 이벤트도 함께 (방폭·카톡감옥 탐지에 필수) */
+  /** 대화에 번호 매기기 — 시스템 이벤트도 함께 (방폭 탐지에 필수) */
   private numberConversation(input: AnalyzeInput): string {
     const header = [
       `[대화 정보]`,
@@ -305,24 +304,17 @@ export class SafeguardAnalysisService {
   /**
    * 시스템 이벤트 기반 패턴의 결정론적 검출 — AI가 필요 없는 절반.
    *
-   * 카톡감옥·방폭은 입·퇴장 로그만으로 정의가 완결된다(누락 없음·설명 가능·무비용).
+   * 방폭은 입·퇴장 로그만으로 정의가 완결된다(누락 없음·설명 가능·무비용).
    * 의미 판단이 필요한 떼카·셔틀·은따·저격글·반톡배제만 1차 AI가 맡고,
    * analyze()가 둘을 합집합한다.
+   *
+   * 카톡감옥(퇴장 → 재초대 반복)은 다루지 않는다: 카톡은 방을 나가면 그 방 기록이
+   * 기기에서 지워져, 피해자 본인의 내보내기에는 퇴장 이전 기록과 재초대 흔적이 남지 않는다.
    */
   detectSystemPatterns(messages: ChatMessage[], victimName: string): string[] {
     const found = new Set<string>();
     const hits = (m: ChatMessage) =>
       (m.targets ?? [m.target]).includes(victimName);
-
-    // 카톡감옥: 피해자 퇴장 → 재초대가 2회 이상
-    let leaves = 0;
-    let reinvites = 0;
-    for (const m of messages) {
-      if (!hits(m)) continue;
-      if (m.systemEvent === 'leave') leaves++;
-      if (m.systemEvent === 'invite' && leaves > 0) reinvites++;
-    }
-    if (reinvites >= 2) found.add('카톡감옥');
 
     // 방폭: 피해자 초대·입장 직후 10분 내 타인 2명 이상 퇴장
     const TEN_MIN = 10 * 60 * 1000;

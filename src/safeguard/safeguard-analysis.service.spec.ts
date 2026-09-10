@@ -125,38 +125,31 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
     expect(doc).toContain('형법 제283조');
   });
 
-  it('detectSystemPatterns: 다중 초대 대상에 피해자가 있어도 카톡감옥을 센다', () => {
+  it('detectSystemPatterns: 다중 초대 대상에 피해자가 있어도 방폭을 센다', () => {
     const msgs = [
       {
         sender: '갑',
         time: '2026-01-01T10:00',
-        text: '',
-        systemEvent: 'leave' as const,
-        target: '을',
-      },
-      {
-        sender: '갑',
-        time: '2026-01-01T10:01',
         text: '',
         systemEvent: 'invite' as const,
         target: '병',
         targets: ['병', '을'],
       },
       {
-        sender: '갑',
+        sender: '정',
         time: '2026-01-01T10:02',
         text: '',
         systemEvent: 'leave' as const,
-        target: '을',
+        target: '정',
       },
       {
-        sender: '갑',
-        time: '2026-01-01T10:03',
+        sender: '무',
+        time: '2026-01-01T10:05',
         text: '',
-        systemEvent: 'invite' as const,
-        target: '을',
+        systemEvent: 'leave' as const,
+        target: '무',
       },
     ];
-    expect(svc.detectSystemPatterns(msgs, '을')).toEqual(['카톡감옥']);
+    expect(svc.detectSystemPatterns(msgs, '을')).toEqual(['방폭']);
   });
 });
