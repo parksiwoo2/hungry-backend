@@ -55,3 +55,7 @@ pids
 # Diagnostic reports (https://nodejs.org/api/report.html)
 report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 server.log
+
+# 로컬 SQLite 저장소 (개인 대화 데이터 — 절대 커밋하지 말 것)
+/data/*.sqlite
+/data/*.sqlite-*

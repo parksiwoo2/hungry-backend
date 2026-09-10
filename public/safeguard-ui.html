@@ -554,65 +554,23 @@
 <script>
 "use strict";
 /* ─────────────────────────────────────────────────────────────
-   Safe Guard — 실서버 연동 UI
-   · 파싱·미리보기: 클라이언트 (서버와 동일한 파서 포트)
-   · 분석: POST /api/analyze — 실제 2패스 파이프라인, 진행 스트리밍
-   · PDF: POST /api/report — 서버(Puppeteer) 생성
+   Hungry Backend — 실서버 연동 UI
+   · 업로드: POST /api/sessions — 서버가 파싱, 참여자 목록 반환
+   · 분석:   POST /api/analyses — 2패스 파이프라인, 진행 스트리밍, 결과 저장
+   · PDF:    GET  /api/analyses/{id}/report — 서버(Puppeteer) 생성
    ───────────────────────────────────────────────────────────── */
 
 const SAMPLE_TXT = "2학년 3반 단톡 님과 카카오톡 대화\n저장한 날짜 : 2026-03-20 21:14:03\n\n--------------- 2026년 3월 4일 수요일 ---------------\n[민준] [오후 7:12] 내일 체육 뭐함?\n[서연] [오후 7:13] 피구래\n[지호] [오후 7:13] ㅇㅋ\n[하준] [오후 7:20] 야 근데 오늘 급식 뭐였음\n[민준] [오후 7:21] 돈까스ㅋㅋ\n[윤아] [오후 7:22] 나 안먹음\n[지호] [오후 7:30] ㅃㅇ\n\n--------------- 2026년 3월 5일 목요일 ---------------\n[민준] [오후 2:20] 야 김윤아 너 어제 왜 급식 안먹었냐\n[윤아] [오후 2:21] 배가 좀 안좋아서\n[민준] [오후 2:22] ㅋㅋㅋㅋ 살 뺀다고 그런거 아님?\n[지호] [오후 2:22] ㅋㅋㅋㅋㅋㅋㅋ\n[민준] [오후 2:23] 빼도 소용없을듯ㅋㅋ\n[하준] [오후 2:23] ㅋㅋㅋㅋㅋ\n[윤아] [오후 2:25] 그만해\n[민준] [오후 2:26] 뭘 그만해 사실인데\n[지호] [오후 2:26] ㅇㅈ\n[민준] [오후 2:27] 너 같은 건 없어져야 해 진짜\n[윤아] [오후 2:30] ...\n[서연] [오후 2:41] 얘들아 그만하자\n[민준] [오후 2:42] 넌 빠져\n[윤아]님이 나갔습니다.\n[민준]님이 [윤아]님을 초대했습니다.\n[민준] [오후 2:45] 어딜 나가냐ㅋㅋ\n[윤아]님이 나갔습니다.\n[민준]님이 [윤아]님을 초대했습니다.\n[민준] [오후 2:47] 나가지 말라고\n[하준] [오후 2:48] ㅋㅋㅋㅋㅋ\n\n--------------- 2026년 3월 6일 금요일 ---------------\n[지호] [오후 8:02] 내일 시험범위 어디까지임\n[서연] [오후 8:05] 3단원까지\n[지호] [오후 8:05] ㄱㅅ\n[민준] [오후 11:40] 야 김윤아\n[민준] [오후 11:41] 내일 매점에서 빵 사와라\n[윤아] [오후 11:52] 나 돈 없는데\n[민준] [오후 11:53] 없으면 만들어와야지\n[민준] [오후 11:53] 안사오면 어떻게 되는지 알지\n[윤아] [오후 11:58] 알겠어\n\n--------------- 2026년 3월 9일 월요일 ---------------\n[민준] [오후 4:10] 야 김윤아 어제 빵 왜 안사왔냐\n[민준] [오후 4:11] 학교 끝나고 뒤에서 보자 진짜\n[윤아] [오후 4:15] 하지마 제발\n[민준] [오후 4:16] 그럼 내일은 두 개 사와\n[윤아] [오후 4:20] 알겠어\n[지호] [오후 4:22] ㅋㅋㅋㅋㅋㅋ\n[하준] [오후 4:25] 개웃기네\n\n--------------- 2026년 3월 12일 목요일 ---------------\n[서연] [오후 6:30] 수행평가 조 정했어?\n[지호] [오후 6:31] ㄴㄴ 아직\n[민준] [오후 9:15] 김윤아 왜 카톡 씹냐\n[민준] [오후 9:15] ㅅㅂ 답장해\n[민준] [오후 9:16] 무시하지 말라고\n[윤아] [오후 9:40] 미안 자고 있었어\n\n--------------- 2026년 3월 15일 일요일 ---------------\n[민준] [오후 3:00] 야 다들 김윤아 인스타 가서 댓글 좀 달아라\n[민준] [오후 3:00] 주소 여기임\n[지호] [오후 3:02] ㅇㅋㅋㅋㅋ\n[하준] [오후 3:03] ㄱㄱ\n\n--------------- 2026년 3월 18일 수요일 ---------------\n[민준] [오후 10:20] 니 번호랑 주소 다 알고 있다\n[민준] [오후 10:21] 어디 사는지도 아는데\n[윤아] [오후 10:35] 왜 이러는거야 진짜\n[민준] [오후 10:36] 그냥ㅋㅋ\n";
 
-/* ── 파서 (gen-sample.mjs 포트 — 미리보기 전용, 분석은 서버 파서) ── */
-const RE_DATE = /^-*\s*(\d{4})년\s*(\d{1,2})월\s*(\d{1,2})일/;
-const RE_MSG = /^\[([^\]]+)\]\s*\[(오전|오후)\s*(\d{1,2}):(\d{2})\]\s*(.*)$/;
-const RE_LEAVE = /^\[?([^\][]+?)\]?님이 나갔습니다\.$/;
-const RE_INVITE = /^\[?([^\][]+?)\]?님이 (.+)님[을과] 초대했습니다\.$/;
-const RE_KICK = /^\[?([^\][]+?)\]?님이 (.+)님을 내보냈습니다\.$/;
-const RE_DELETED = /^메시지가 삭제되었습니다\.$/;
-const RE_MOBILE = /^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})\.\s*(오전|오후)\s*(\d{1,2}):(\d{2})(,|:)\s*(.*)$/;
-const RE_MOBILE_BODY = /^(.+?) : ([\s\S]*)$/;
-const to24 = (ap, hh) => { let h = +hh; if (ap === "오후" && h !== 12) h += 12; if (ap === "오전" && h === 12) h = 0; return String(h).padStart(2, "0"); };
-const splitTargets = (s) => (s + "님").split(/님[,과와]\s*|님$/).map((n) => n.replace(/[[\]]/g, "").trim()).filter(Boolean);
-function sysEvent(text, time) {
-  let m;
-  if ((m = text.match(RE_LEAVE))) return { sender: m[1], time, text, systemEvent: "leave", target: m[1] };
-  if ((m = text.match(RE_INVITE))) { const t = splitTargets(m[2]); return { sender: m[1].replace(/[[\]]/g, ""), time, text, systemEvent: "invite", target: t[0], targets: t.length > 1 ? t : undefined }; }
-  if ((m = text.match(RE_KICK))) { const t = splitTargets(m[2]); return { sender: m[1].replace(/[[\]]/g, ""), time, text, systemEvent: "kick", target: t[0], targets: t.length > 1 ? t : undefined }; }
-  if (RE_DELETED.test(text)) return { sender: "(알 수 없음)", time, text, systemEvent: "delete" };
-  return null;
-}
-function parseKakao(raw) {
-  const out = []; let date = null;
-  for (const line of raw.split("\n")) {
-    const t = line.trim(); if (!t) continue;
-    const mb = t.match(RE_MOBILE);
-    if (mb) {
-      const [, y, mo, d, ap, hh, mm, sep, rest] = mb;
-      date = y + "-" + String(mo).padStart(2, "0") + "-" + String(d).padStart(2, "0");
-      const time = date + "T" + to24(ap, hh) + ":" + mm;
-      const body = sep === "," ? rest.match(RE_MOBILE_BODY) : null;
-      if (body) out.push({ sender: body[1], time, text: body[2] });
-      else { const ev = sysEvent(rest, time); if (ev) out.push(ev); }
-      continue;
-    }
-    const dd = t.match(RE_DATE);
-    if (dd) { date = dd[1] + "-" + String(dd[2]).padStart(2, "0") + "-" + String(dd[3]).padStart(2, "0"); continue; }
-    if (!date) continue;
-    const ev = sysEvent(t, out[out.length - 1] && out[out.length - 1].time);
-    if (ev) { out.push(ev); continue; }
-    const m = t.match(RE_MSG);
-    if (m) { out.push({ sender: m[1], time: date + "T" + to24(m[2], m[3]) + ":" + m[4], text: m[5] }); continue; }
-    if (out.length) out[out.length - 1].text += "\n" + t;
-  }
-  return out;
-}
-
 /* ── 상태 ── */
 const $ = (id) => document.getElementById(id);
 const state = {
-  rawText: "", fileName: "", messages: [], senders: [],
-  victim: null, room: null, result: null, busy: false,
+  fileName: "",
+  session: null,   // POST /api/sessions 응답
+  analysis: null,  // POST /api/analyses 의 result 줄 (= GET /api/analyses/{id})
+  victim: null, room: null, busy: false,
 };
+const senders = () => (state.session ? state.session.participants.map((p) => p.name) : []);
 
 /* ── 화면 전환 ── */
 const SCREENS = ["home", "confirm", "progress", "result"];
@@ -677,30 +635,43 @@ $("dropzone").addEventListener("drop", (e) => {
 window.addEventListener("dragover", (e) => e.preventDefault());
 window.addEventListener("drop", (e) => e.preventDefault());
 
-function loadFile(raw, name) {
-  const msgs = parseKakao(raw);
-  if (msgs.length === 0) { toast("대화 형식을 읽지 못했어요. 내보내기 원본 파일인지 확인해 주세요."); return; }
-  state.rawText = raw;
-  state.fileName = name;
-  state.messages = msgs;
-  state.senders = [...new Set(msgs.filter((m) => !m.systemEvent).map((m) => m.sender))];
-  state.victim = null;
-  state.room = state.senders.length <= 2 ? "dm" : "group";
-  renderConfirm();
-  go("confirm");
+/* 서버에 올려 세션을 만든다 — 파싱·참여자 집계는 서버가 한다 */
+async function loadFile(raw, name) {
+  if (state.busy) return;
+  state.busy = true;
+  try {
+    const res = await fetch("/api/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rawText: raw, source: "kakao_export" }),
+    });
+    if (res.status === 400) throw new Error("대화 형식을 읽지 못했어요. 내보내기 원본 파일인지 확인해 주세요.");
+    if (!res.ok) throw new Error("서버에 연결하지 못했어요 (" + res.status + ")");
+    state.session = await res.json();
+    state.fileName = name;
+    state.analysis = null;
+    state.victim = null;
+    state.room = senders().length <= 2 ? "dm" : "group";
+    renderConfirm();
+    go("confirm");
+  } catch (e) {
+    toast(e.message);
+  }
+  state.busy = false;
 }
 
 /* ── 확인 화면 ── */
 function fmtDate(iso) { return iso.slice(5, 7).replace(/^0/, "") + "월 " + iso.slice(8, 10).replace(/^0/, "") + "일"; }
+const FORMAT_LABEL = { kakao_pc: "PC", kakao_mobile_dm: "모바일 1:1", kakao_mobile_group: "모바일 그룹" };
 function renderConfirm() {
-  const ms = state.messages;
-  const days = new Set(ms.map((m) => m.time && m.time.slice(0, 10))).size;
+  const s = state.session;
+  const names = senders();
   $("confirmSub").textContent = state.fileName + " · 아래 내용이 맞는지 확인해 주세요.";
   $("fileMeta").innerHTML =
-    '<div><div class="k">메시지</div><div class="v num">' + ms.length + "건</div></div>" +
-    '<div><div class="k">기간</div><div class="v num">' + fmtDate(ms[0].time) + " – " + fmtDate(ms[ms.length - 1].time) + "</div></div>" +
-    '<div><div class="k">참여자</div><div class="v num">' + state.senders.length + "명</div></div>" +
-    '<div><div class="k">기록된 날</div><div class="v num">' + days + "일</div></div>";
+    '<div><div class="k">메시지</div><div class="v num">' + s.messageCount + "건</div></div>" +
+    '<div><div class="k">기간</div><div class="v num">' + (s.period ? fmtDate(s.period.from) + " – " + fmtDate(s.period.to) : "-") + "</div></div>" +
+    '<div><div class="k">참여자</div><div class="v num">' + names.length + "명</div></div>" +
+    '<div><div class="k">형식</div><div class="v num">' + (FORMAT_LABEL[s.format] || s.format) + "</div></div>";
 
   const rooms = [["dm", "1:1 대화"], ["group", "단체 대화방"], ["public", "공개 게시판"]];
   $("roomChips").innerHTML = rooms.map(([v, l]) =>
@@ -708,10 +679,10 @@ function renderConfirm() {
   $("roomChips").querySelectorAll(".chip").forEach((c) =>
     c.addEventListener("click", () => { state.room = c.dataset.v; renderConfirm(); }));
 
-  $("victimChips").innerHTML = state.senders.map((s) =>
-    '<button class="chip' + (state.victim === s ? " sel" : "") + '" type="button">' + esc(s) + "</button>").join("");
+  $("victimChips").innerHTML = names.map((n) =>
+    '<button class="chip' + (state.victim === n ? " sel" : "") + '" type="button">' + esc(n) + "</button>").join("");
   $("victimChips").querySelectorAll(".chip").forEach((c, i) =>
-    c.addEventListener("click", () => { state.victim = state.senders[i]; renderConfirm(); }));
+    c.addEventListener("click", () => { state.victim = names[i]; renderConfirm(); }));
 
   renderCta("confirm");
 }
@@ -720,10 +691,8 @@ function renderConfirm() {
 function serverContext() {
   if (state.room === "dm") return "dm";
   if (state.room === "public") return "public";
-  return state.senders.length >= 6 ? "large_group" : "small_group";
+  return senders().length >= 6 ? "large_group" : "small_group";
 }
-
-const STAGE_STEP = { anonymize: 0, screen: 1, screen_done: 1, match_done: 2, judge: 3, judge_done: 3 };
 
 async function startAnalysis() {
   if (state.busy) return;
@@ -744,10 +713,10 @@ async function startAnalysis() {
   };
 
   try {
-    const res = await fetch("/api/analyze", {
+    const res = await fetch("/api/analyses", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ rawText: state.rawText, context: serverContext(), victimName: state.victim }),
+      body: JSON.stringify({ sessionIds: [state.session.sessionId], context: serverContext(), victimName: state.victim }),
     });
     if (!res.ok || !res.body) throw new Error("서버에 연결하지 못했어요 (" + res.status + ")");
 
@@ -783,7 +752,7 @@ async function startAnalysis() {
     if (!result) throw new Error("분석 결과를 받지 못했어요");
 
     setDone(4, "완료");
-    state.result = { flagged: result.flagged, patterns: result.patterns, usage: result.usage };
+    state.analysis = result;
     setTimeout(() => { renderResult(); go("result"); state.busy = false; }, 500);
   } catch (e) {
     state.busy = false;
@@ -797,9 +766,9 @@ const SEV = { "즉시조치": ["s3", "var(--sev-3)"], "주의": ["s2", "var(--se
 function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
 
 function renderResult() {
-  const flagged = state.result.flagged;
-  const msgs = state.messages;
-  $("resultSub").textContent = state.fileName + " · " + msgs.length + "건 분석";
+  const a = state.analysis;
+  const flagged = a.utterances;
+  $("resultSub").textContent = state.fileName + " · " + state.session.messageCount + "건 분석";
 
   if (flagged.length === 0) {
     $("rCount").innerHTML = '피해로 볼 내용이<br>발견되지 않았어요';
@@ -816,7 +785,7 @@ function renderResult() {
     return;
   }
 
-  const times = flagged.flatMap((f) => f.messageNos.map((no) => msgs[no - 1].time)).sort();
+  const times = flagged.flatMap((f) => f.messages.map((m) => m.time)).sort();
   const days = new Set(times.map((t) => t.slice(0, 10))).size;
   $("rCount").style.fontSize = "";
   $("rCount").innerHTML = flagged.length + '<small> 건의 피해 확인</small>';
@@ -835,23 +804,23 @@ function renderResult() {
   $("typeChips").innerHTML = Object.entries(typeCount).sort((a, b) => b[1] - a[1]).map(([k, v]) =>
     '<span class="stat-chip">' + k + ' <b class="num">' + v + "</b></span>").join("");
 
-  $("patternChips").innerHTML = state.result.patterns.length
-    ? state.result.patterns.map((p) => '<span class="stat-chip warn">' + p + "</span>").join("")
+  $("patternChips").innerHTML = a.patterns.length
+    ? a.patterns.map((p) => '<span class="stat-chip warn">' + p + "</span>").join("")
     : '<span class="stat-chip">해당 없음</span>';
 
   const senderCount = {};
-  flagged.forEach((f) => f.messageNos.forEach((no) => { const s = msgs[no - 1].sender; senderCount[s] = (senderCount[s] || 0) + 1; }));
+  flagged.forEach((f) => f.messages.forEach((m) => { senderCount[m.sender] = (senderCount[m.sender] || 0) + 1; }));
   $("senderChips").innerHTML = Object.entries(senderCount).sort((a, b) => b[1] - a[1]).map(([k, v]) =>
     '<span class="stat-chip">' + esc(k) + ' <b class="num">' + v + "</b></span>").join("");
 
   $("listLabel").textContent = "피해 내역 " + flagged.length + "건";
   $("itemList").innerHTML = flagged.map((f) => {
-    const ms = f.messageNos.map((no) => msgs[no - 1]);
+    const ms = f.messages;
     const first = ms[0], last = ms[ms.length - 1];
-    const senders = [...new Set(ms.map((m) => m.sender))].map(esc).join(", ");
+    const who = [...new Set(ms.map((m) => m.sender))].map(esc).join(", ");
     const when = ms.length === 1
       ? first.time.replace("T", " ") + " · " + esc(first.sender)
-      : first.time.replace("T", " ") + " ~ " + last.time.slice(5).replace("T", " ") + " · " + senders + " · " + ms.length + "개";
+      : first.time.replace("T", " ") + " ~ " + last.time.slice(5).replace("T", " ") + " · " + who + " · " + ms.length + "개";
     const quote = ms.length === 1
       ? '<div class="msg">“' + esc(first.text) + "”</div>"
       : '<div class="msg seg">' + ms.map((m) =>
@@ -874,26 +843,18 @@ function download(blob, name) {
   setTimeout(() => URL.revokeObjectURL(a.href), 3000);
 }
 $("dlPdf").addEventListener("click", async () => {
-  if (!state.result) return;
+  if (!state.analysis) return;
   toast("정리 문서를 만들고 있어요…");
   try {
-    const res = await fetch("/api/report", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        rawText: state.rawText, context: serverContext(), victimName: state.victim,
-        result: { flagged: state.result.flagged, patterns: state.result.patterns }, legal: true,
-      }),
-    });
+    const res = await fetch("/api/analyses/" + encodeURIComponent(state.analysis.analysisId) + "/report?legal=true");
     if (!res.ok) throw new Error("문서 생성에 실패했어요 (" + res.status + ")");
     download(await res.blob(), "피해정리문서.pdf");
     toast("정리 문서를 저장했어요");
   } catch (e) { toast(e.message); }
 });
 $("dlJson").addEventListener("click", () => {
-  if (!state.result) return;
-  download(new Blob([JSON.stringify({ flagged: state.result.flagged, patterns: state.result.patterns }, null, 2)],
-    { type: "application/json" }), "분석데이터.json");
+  if (!state.analysis) return;
+  download(new Blob([JSON.stringify(state.analysis, null, 2)], { type: "application/json" }), "분석데이터.json");
   toast("분석 데이터를 저장했어요");
 });
 

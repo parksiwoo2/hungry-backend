@@ -234,7 +234,7 @@ const SYSTEM_JUDGE = `너는 사이버폭력 후보 구간의 2차 판단자다.
 - "신고할 정도는 아니다" 같은 판정 표현을 쓰지 마라. 상태만 기술하라.
 - 이 분석은 참고용이며 법적 판단이 아니다.`;
 
-interface Summary {
+export interface Summary {
   count: number;
   start?: string;
   end?: string;
