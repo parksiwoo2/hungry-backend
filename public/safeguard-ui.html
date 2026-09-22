@@ -1,0 +1,874 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hungry Backend — 대화 분석</title>
+<style>
+  :root {
+    --ground: #F5F7F6;
+    --surface: #FFFFFF;
+    --surface-2: #ECF1EF;
+    --ink: #16211F;
+    --ink-2: #5B6B66;
+    --ink-3: #8FA09A;
+    --line: #DFE7E4;
+    --accent: #0E6E5C;
+    --accent-ink: #FFFFFF;
+    --accent-soft: #E3F0EC;
+    --sev-3: #C33D35;
+    --sev-3-soft: #F9E9E8;
+    --sev-2: #C77E1F;
+    --sev-2-soft: #F8EFDF;
+    --sev-1: #6B7A76;
+    --sev-1-soft: #EAEEEC;
+    --shadow: 0 1px 2px rgba(22,33,31,.05), 0 6px 24px -12px rgba(22,33,31,.18);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --ground: #0F1614;
+      --surface: #18211E;
+      --surface-2: #202B27;
+      --ink: #E7EEEB;
+      --ink-2: #9DAFA9;
+      --ink-3: #6E7F79;
+      --line: #2A3733;
+      --accent: #4FB39C;
+      --accent-ink: #0B1512;
+      --accent-soft: #1E3A33;
+      --sev-3: #E2685F;
+      --sev-3-soft: #3A211F;
+      --sev-2: #D99A45;
+      --sev-2-soft: #38290F;
+      --sev-1: #93A5A0;
+      --sev-1-soft: #263029;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0F1614;
+    --surface: #18211E;
+    --surface-2: #202B27;
+    --ink: #E7EEEB;
+    --ink-2: #9DAFA9;
+    --ink-3: #6E7F79;
+    --line: #2A3733;
+    --accent: #4FB39C;
+    --accent-ink: #0B1512;
+    --accent-soft: #1E3A33;
+    --sev-3: #E2685F;
+    --sev-3-soft: #3A211F;
+    --sev-2: #D99A45;
+    --sev-2-soft: #38290F;
+    --sev-1: #93A5A0;
+    --sev-1-soft: #263029;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 8px 24px -12px rgba(0,0,0,.5);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--ground);
+    color: var(--ink);
+    font-family: "Apple SD Gothic Neo", "Pretendard", "Noto Sans KR", "Malgun Gothic", sans-serif;
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    word-break: keep-all;
+  }
+  .phone {
+    max-width: 430px;
+    margin: 0 auto;
+    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    background: var(--ground);
+  }
+  @media (min-width: 500px) {
+    body { padding: 24px 0; }
+    .phone {
+      min-height: calc(100dvh - 48px);
+      border: 1px solid var(--line);
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: var(--shadow);
+    }
+  }
+
+  /* ── 앱 바 ── */
+  .appbar {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 18px 20px 12px;
+  }
+  .appbar .mark { flex: none; width: 26px; height: 26px; }
+  .appbar .name {
+    font-weight: 800;
+    font-size: 16px;
+    letter-spacing: -0.01em;
+  }
+  .appbar .back {
+    appearance: none;
+    border: none;
+    background: none;
+    color: var(--ink-2);
+    font: inherit;
+    font-size: 14px;
+    padding: 4px 8px 4px 0;
+    cursor: pointer;
+    display: none;
+  }
+  .appbar .back:focus-visible { outline: 2px solid var(--accent); border-radius: 6px; }
+  .appbar.can-back .back { display: block; }
+
+  main { flex: 1; padding: 4px 20px 120px; }
+
+  .screen { display: none; }
+  .screen.on { display: block; animation: rise .28s ease; }
+  @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .screen.on { animation: none; }
+    * { transition: none !important; }
+  }
+
+  /* ── 공통 ── */
+  h1 {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.02em;
+    line-height: 1.3;
+    margin: 18px 0 8px;
+    text-wrap: balance;
+  }
+  .sub { color: var(--ink-2); font-size: 14px; margin: 0 0 20px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 18px;
+    box-shadow: var(--shadow);
+  }
+  .label {
+    font-size: 11.5px;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--ink-3);
+    margin: 0 0 8px;
+  }
+  .stack { display: flex; flex-direction: column; gap: 14px; }
+  .num { font-variant-numeric: tabular-nums; }
+
+  /* ── CTA ── */
+  .cta-wrap {
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    padding: 12px 20px calc(16px + env(safe-area-inset-bottom));
+    background: linear-gradient(to top, var(--ground) 65%, transparent);
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .cta-inner { width: 100%; max-width: 390px; display: flex; flex-direction: column; gap: 8px; pointer-events: auto; }
+  .btn {
+    appearance: none;
+    border: none;
+    width: 100%;
+    padding: 15px 18px;
+    border-radius: 14px;
+    font: inherit;
+    font-size: 15.5px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: transform .12s ease, opacity .12s ease;
+  }
+  .btn:active { transform: scale(.985); }
+  .btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+  .btn.primary { background: var(--accent); color: var(--accent-ink); }
+  .btn.primary:disabled { opacity: .4; cursor: default; }
+  .btn.ghost { background: none; color: var(--ink-2); font-weight: 600; padding: 8px; }
+
+  /* ── 홈 ── */
+  .hero-mark { width: 52px; height: 52px; margin-top: 26px; }
+  .upload {
+    border: 1.5px dashed var(--line);
+    background: var(--surface);
+    border-radius: 16px;
+    padding: 30px 20px;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .15s ease, background .15s ease;
+  }
+  .upload:hover, .upload:focus-visible { border-color: var(--accent); outline: none; }
+  .upload.drag { border-color: var(--accent); background: var(--accent-soft); }
+  .upload .big { font-weight: 700; font-size: 15.5px; margin: 10px 0 4px; }
+  .upload .hint { color: var(--ink-3); font-size: 13px; }
+  .upload svg { width: 34px; height: 34px; }
+  .privacy {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    background: var(--accent-soft);
+    border-radius: 12px;
+    padding: 12px 14px;
+    font-size: 13px;
+    color: var(--ink-2);
+  }
+  .privacy svg { flex: none; width: 18px; height: 18px; margin-top: 1px; }
+  .privacy b { color: var(--ink); font-weight: 700; }
+
+  /* ── 파일 확인 ── */
+  .filemeta { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--line); border-radius: 12px; overflow: hidden; }
+  .filemeta > div { background: var(--surface); padding: 12px 14px; }
+  .filemeta .k { font-size: 12px; color: var(--ink-3); margin-bottom: 2px; }
+  .filemeta .v { font-weight: 700; font-size: 15px; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .chip {
+    appearance: none;
+    font: inherit;
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 8px 14px;
+    border-radius: 999px;
+    border: 1px solid var(--line);
+    background: var(--surface);
+    color: var(--ink-2);
+    cursor: pointer;
+    transition: all .12s ease;
+  }
+  .chip:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .chip.sel { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+
+  /* ── 분석 중 ── */
+  .steps { display: flex; flex-direction: column; gap: 0; margin-top: 8px; }
+  .step {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 13px 4px;
+    border-bottom: 1px solid var(--line);
+    color: var(--ink-3);
+    font-size: 14.5px;
+    transition: color .2s ease;
+  }
+  .step:last-child { border-bottom: none; }
+  .step .dot {
+    flex: none;
+    width: 22px; height: 22px;
+    border-radius: 50%;
+    border: 2px solid var(--line);
+    display: grid;
+    place-items: center;
+    font-size: 12px;
+    transition: all .2s ease;
+  }
+  .step.run { color: var(--ink); font-weight: 600; }
+  .step.run .dot { border-color: var(--accent); }
+  .step.run .dot::after {
+    content: "";
+    width: 9px; height: 9px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 1s ease-in-out infinite;
+  }
+  @keyframes pulse { 50% { opacity: .35; } }
+  .step.done { color: var(--ink-2); }
+  .step.done .dot { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+  .step .note { margin-left: auto; font-size: 12.5px; color: var(--ink-3); }
+
+  .demo-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--sev-2);
+    background: var(--sev-2-soft);
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+
+  /* ── 결과 ── */
+  .result-hero { text-align: left; padding: 20px 18px; }
+  .result-hero .count { font-size: 40px; font-weight: 800; letter-spacing: -0.03em; line-height: 1.1; }
+  .result-hero .count small { font-size: 17px; font-weight: 700; color: var(--ink-2); letter-spacing: 0; }
+  .result-hero .period { color: var(--ink-2); font-size: 13.5px; margin-top: 6px; }
+  .pill {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+    background: var(--sev-3-soft);
+    color: var(--sev-3);
+    margin-top: 10px;
+  }
+  .sevbar { display: flex; height: 10px; border-radius: 6px; overflow: hidden; margin: 14px 0 10px; }
+  .sevbar span { height: 100%; }
+  .sevlegend { display: flex; gap: 14px; font-size: 12.5px; color: var(--ink-2); flex-wrap: wrap; }
+  .sevlegend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; }
+
+  .stat-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .stat-chip {
+    font-size: 13px;
+    font-weight: 600;
+    background: var(--surface-2);
+    color: var(--ink-2);
+    padding: 6px 12px;
+    border-radius: 999px;
+  }
+  .stat-chip b { color: var(--ink); }
+  .stat-chip.warn { background: var(--sev-3-soft); color: var(--sev-3); }
+  .stat-chip.warn b { color: var(--sev-3); }
+
+  .item {
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 14px 16px;
+    border-left: 4px solid var(--sev-1);
+  }
+  .item.s3 { border-left-color: var(--sev-3); }
+  .item.s2 { border-left-color: var(--sev-2); }
+  .item .head { display: flex; align-items: baseline; gap: 8px; font-size: 12.5px; color: var(--ink-3); }
+  .item .sev {
+    margin-left: auto;
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 2px 9px;
+    border-radius: 999px;
+  }
+  .item.s3 .sev { background: var(--sev-3-soft); color: var(--sev-3); }
+  .item.s2 .sev { background: var(--sev-2-soft); color: var(--sev-2); }
+  .item.s1 .sev { background: var(--sev-1-soft); color: var(--sev-1); }
+  .item .msg { font-size: 15px; font-weight: 600; margin: 7px 0 6px; }
+  .item .msg.seg { font-weight: 500; font-size: 14px; display: flex; flex-direction: column; gap: 4px; }
+  .item .qmeta { color: var(--ink-3); font-size: 11.5px; font-weight: 600; margin-right: 6px; }
+  .item .types { font-size: 12.5px; color: var(--accent); font-weight: 700; margin-bottom: 5px; }
+  .item .why { font-size: 13px; color: var(--ink-2); }
+
+  .dl {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    text-align: left;
+    appearance: none;
+    font: inherit;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 15px 16px;
+    cursor: pointer;
+    color: var(--ink);
+    transition: border-color .12s ease;
+  }
+  .dl:hover, .dl:focus-visible { border-color: var(--accent); outline: none; }
+  .dl .ic {
+    flex: none;
+    width: 40px; height: 40px;
+    border-radius: 11px;
+    background: var(--accent-soft);
+    display: grid;
+    place-items: center;
+  }
+  .dl .ic svg { width: 20px; height: 20px; }
+  .dl .t { font-weight: 700; font-size: 14.5px; }
+  .dl .d { font-size: 12.5px; color: var(--ink-3); }
+  .dl .arrow { margin-left: auto; color: var(--ink-3); }
+
+  .foot {
+    font-size: 12px;
+    color: var(--ink-3);
+    line-height: 1.6;
+    padding: 18px 4px 8px;
+  }
+  .toast {
+    position: fixed;
+    left: 50%;
+    bottom: calc(96px + env(safe-area-inset-bottom));
+    transform: translateX(-50%) translateY(8px);
+    background: var(--ink);
+    color: var(--ground);
+    font-size: 13.5px;
+    font-weight: 600;
+    padding: 10px 18px;
+    border-radius: 999px;
+    opacity: 0;
+    pointer-events: none;
+    transition: all .25s ease;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+</style>
+</head>
+<body>
+
+
+<div class="phone">
+  <div class="appbar" id="appbar">
+    <button class="back" id="btnBack" type="button">‹ 뒤로</button>
+    <svg class="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 2.5 L20 5.5 V11 C20 16.5 16.6 20.4 12 21.8 C7.4 20.4 4 16.5 4 11 V5.5 Z"
+            fill="var(--accent)" opacity=".14"/>
+      <path d="M12 2.5 L20 5.5 V11 C20 16.5 16.6 20.4 12 21.8 C7.4 20.4 4 16.5 4 11 V5.5 Z"
+            stroke="var(--accent)" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M8.6 11.6 L11 14 L15.6 9.2" stroke="var(--accent)" stroke-width="1.9"
+            stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="name">Hungry Backend</div>
+  </div>
+
+  <main>
+    <!-- ══ 1. 업로드 ══ -->
+    <section class="screen on" id="scr-home">
+      <h1>대화를 올리면<br>피해 기록이 정리됩니다</h1>
+      <p class="sub">카카오톡 ‘대화 내보내기’ 파일을 분석해 피해 유형과 근거를 정리해 드려요.</p>
+
+      <div class="stack">
+        <div class="upload" id="dropzone" role="button" tabindex="0" aria-label="대화 파일 선택">
+          <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <path d="M12 16 V5 M12 5 L8 9 M12 5 L16 9" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="M4 15 V18.5 C4 19.6 4.9 20.5 6 20.5 H18 C19.1 20.5 20 19.6 20 18.5 V15" stroke="var(--ink-3)" stroke-width="1.8" stroke-linecap="round"/>
+          </svg>
+          <div class="big">대화 파일 올리기</div>
+          <div class="hint">Talk_….txt — 1:1 · 그룹 · PC 내보내기 지원</div>
+          <input type="file" id="fileInput" accept=".txt,text/plain" hidden>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ 2. 확인 ══ -->
+    <section class="screen" id="scr-confirm">
+      <h1>대화를 확인했어요</h1>
+      <p class="sub" id="confirmSub"></p>
+
+      <div class="stack">
+        <div class="filemeta" id="fileMeta"></div>
+
+        <div>
+          <p class="label">대화방 종류</p>
+          <div class="chips" id="roomChips"></div>
+        </div>
+
+        <div>
+          <p class="label">본인(피해자) 이름 선택</p>
+          <div class="chips" id="victimChips"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ 3. 분석 중 ══ -->
+    <section class="screen" id="scr-progress">
+      <h1>분석하고 있어요</h1>
+      <p class="sub">대화 전체를 읽고 판례에 비추어 판단합니다.</p>
+      <div class="card">
+        <div class="steps" id="steps">
+          <div class="step" data-s="0"><span class="dot"></span>이름 가명 처리<span class="note"></span></div>
+          <div class="step" data-s="1"><span class="dot"></span>피해 후보 선별<span class="note"></span></div>
+          <div class="step" data-s="2"><span class="dot"></span>유사 판례 검색<span class="note"></span></div>
+          <div class="step" data-s="3"><span class="dot"></span>유형·정도 판단<span class="note"></span></div>
+          <div class="step" data-s="4"><span class="dot"></span>정리 문서 생성<span class="note"></span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══ 4. 결과 ══ -->
+    <section class="screen" id="scr-result">
+      <div style="display:flex; align-items:center; gap:8px; margin-top:14px;">
+        <h1 style="margin:0;">분석 결과</h1>
+        
+      </div>
+      <p class="sub" id="resultSub" style="margin-top:6px;"></p>
+
+      <div class="stack">
+        <div class="card result-hero">
+          <div class="count num" id="rCount"></div>
+          <div class="period num" id="rPeriod"></div>
+          <span class="pill" id="rRepeat" hidden>서로 다른 여러 날에 반복됨</span>
+          <div class="sevbar" id="sevBar"></div>
+          <div class="sevlegend" id="sevLegend"></div>
+        </div>
+
+        <div>
+          <p class="label">피해 유형</p>
+          <div class="stat-chips" id="typeChips"></div>
+        </div>
+
+        <div>
+          <p class="label">관찰된 괴롭힘 패턴</p>
+          <div class="stat-chips" id="patternChips"></div>
+        </div>
+
+        <div>
+          <p class="label">보낸 사람별</p>
+          <div class="stat-chips" id="senderChips"></div>
+        </div>
+
+        <div>
+          <p class="label">파일로 받기</p>
+          <div class="stack" style="gap:10px;">
+            <button class="dl" id="dlPdf" type="button">
+              <span class="ic">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M7 3.5 H14 L19 8.5 V19 C19 20.1 18.1 21 17 21 H7 C5.9 21 5 20.1 5 19 V5.5 C5 4.4 5.9 3.5 7 3.5 Z" stroke="var(--accent)" stroke-width="1.7"/><path d="M14 3.5 V8.5 H19" stroke="var(--accent)" stroke-width="1.7"/></svg>
+              </span>
+              <span>
+                <div class="t">정리 문서 (PDF)</div>
+                <div class="d">관련 조항·절차가 포함된 정리본</div>
+              </span>
+              <span class="arrow">↓</span>
+            </button>
+            <button class="dl" id="dlJson" type="button">
+              <span class="ic">
+                <svg viewBox="0 0 24 24" fill="none"><path d="M8 4 C6 4 6 6 6 7.5 C6 9 6 10 4.5 10.5 C6 11 6 12 6 13.5 C6 15 6 17 8 17" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round"/><path d="M16 4 C18 4 18 6 18 7.5 C18 9 18 10 19.5 10.5 C18 11 18 12 18 13.5 C18 15 18 17 16 17" stroke="var(--accent)" stroke-width="1.7" stroke-linecap="round"/></svg>
+              </span>
+              <span>
+                <div class="t">분석 데이터 (JSON)</div>
+                <div class="d">항목별 유형·정도·판단 근거</div>
+              </span>
+              <span class="arrow">↓</span>
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <p class="label" id="listLabel">피해 내역</p>
+          <div class="stack" style="gap:10px;" id="itemList"></div>
+        </div>
+
+        <p class="foot">
+          본 정리는 참고용이며 법률 자문이 아닙니다. 정확한 판단은 변호사, 대한법률구조공단(132),
+          청소년 상담(1388)에 문의하세요. 조문·형량은 국가법령정보의 현행 조문 기준입니다.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <div class="cta-wrap" id="ctaWrap">
+    <div class="cta-inner" id="ctaInner"></div>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+
+
+<script>
+"use strict";
+/* ─────────────────────────────────────────────────────────────
+   Hungry Backend — 실서버 연동 UI
+   · 업로드: POST /api/sessions — 서버가 파싱, 참여자 목록 반환
+   · 분석:   POST /api/analyses — 2패스 파이프라인, 진행 스트리밍, 결과 저장
+   · PDF:    GET  /api/analyses/{id}/report — 서버(Puppeteer) 생성
+   ───────────────────────────────────────────────────────────── */
+
+const SAMPLE_TXT = "2학년 3반 단톡 님과 카카오톡 대화\n저장한 날짜 : 2026-03-20 21:14:03\n\n--------------- 2026년 3월 4일 수요일 ---------------\n[민준] [오후 7:12] 내일 체육 뭐함?\n[서연] [오후 7:13] 피구래\n[지호] [오후 7:13] ㅇㅋ\n[하준] [오후 7:20] 야 근데 오늘 급식 뭐였음\n[민준] [오후 7:21] 돈까스ㅋㅋ\n[윤아] [오후 7:22] 나 안먹음\n[지호] [오후 7:30] ㅃㅇ\n\n--------------- 2026년 3월 5일 목요일 ---------------\n[민준] [오후 2:20] 야 김윤아 너 어제 왜 급식 안먹었냐\n[윤아] [오후 2:21] 배가 좀 안좋아서\n[민준] [오후 2:22] ㅋㅋㅋㅋ 살 뺀다고 그런거 아님?\n[지호] [오후 2:22] ㅋㅋㅋㅋㅋㅋㅋ\n[민준] [오후 2:23] 빼도 소용없을듯ㅋㅋ\n[하준] [오후 2:23] ㅋㅋㅋㅋㅋ\n[윤아] [오후 2:25] 그만해\n[민준] [오후 2:26] 뭘 그만해 사실인데\n[지호] [오후 2:26] ㅇㅈ\n[민준] [오후 2:27] 너 같은 건 없어져야 해 진짜\n[윤아] [오후 2:30] ...\n[서연] [오후 2:41] 얘들아 그만하자\n[민준] [오후 2:42] 넌 빠져\n[윤아]님이 나갔습니다.\n[민준]님이 [윤아]님을 초대했습니다.\n[민준] [오후 2:45] 어딜 나가냐ㅋㅋ\n[윤아]님이 나갔습니다.\n[민준]님이 [윤아]님을 초대했습니다.\n[민준] [오후 2:47] 나가지 말라고\n[하준] [오후 2:48] ㅋㅋㅋㅋㅋ\n\n--------------- 2026년 3월 6일 금요일 ---------------\n[지호] [오후 8:02] 내일 시험범위 어디까지임\n[서연] [오후 8:05] 3단원까지\n[지호] [오후 8:05] ㄱㅅ\n[민준] [오후 11:40] 야 김윤아\n[민준] [오후 11:41] 내일 매점에서 빵 사와라\n[윤아] [오후 11:52] 나 돈 없는데\n[민준] [오후 11:53] 없으면 만들어와야지\n[민준] [오후 11:53] 안사오면 어떻게 되는지 알지\n[윤아] [오후 11:58] 알겠어\n\n--------------- 2026년 3월 9일 월요일 ---------------\n[민준] [오후 4:10] 야 김윤아 어제 빵 왜 안사왔냐\n[민준] [오후 4:11] 학교 끝나고 뒤에서 보자 진짜\n[윤아] [오후 4:15] 하지마 제발\n[민준] [오후 4:16] 그럼 내일은 두 개 사와\n[윤아] [오후 4:20] 알겠어\n[지호] [오후 4:22] ㅋㅋㅋㅋㅋㅋ\n[하준] [오후 4:25] 개웃기네\n\n--------------- 2026년 3월 12일 목요일 ---------------\n[서연] [오후 6:30] 수행평가 조 정했어?\n[지호] [오후 6:31] ㄴㄴ 아직\n[민준] [오후 9:15] 김윤아 왜 카톡 씹냐\n[민준] [오후 9:15] ㅅㅂ 답장해\n[민준] [오후 9:16] 무시하지 말라고\n[윤아] [오후 9:40] 미안 자고 있었어\n\n--------------- 2026년 3월 15일 일요일 ---------------\n[민준] [오후 3:00] 야 다들 김윤아 인스타 가서 댓글 좀 달아라\n[민준] [오후 3:00] 주소 여기임\n[지호] [오후 3:02] ㅇㅋㅋㅋㅋ\n[하준] [오후 3:03] ㄱㄱ\n\n--------------- 2026년 3월 18일 수요일 ---------------\n[민준] [오후 10:20] 니 번호랑 주소 다 알고 있다\n[민준] [오후 10:21] 어디 사는지도 아는데\n[윤아] [오후 10:35] 왜 이러는거야 진짜\n[민준] [오후 10:36] 그냥ㅋㅋ\n";
+
+/* ── 상태 ── */
+const $ = (id) => document.getElementById(id);
+const state = {
+  fileName: "",
+  session: null,   // POST /api/sessions 응답
+  analysis: null,  // POST /api/analyses 의 result 줄 (= GET /api/analyses/{id})
+  victim: null, room: null, busy: false,
+};
+const senders = () => (state.session ? state.session.participants.map((p) => p.name) : []);
+
+/* ── 화면 전환 ── */
+const SCREENS = ["home", "confirm", "progress", "result"];
+function go(name) {
+  SCREENS.forEach((s) => $("scr-" + s).classList.toggle("on", s === name));
+  $("appbar").classList.toggle("can-back", name === "confirm" || name === "result");
+  renderCta(name);
+  window.scrollTo({ top: 0 });
+}
+$("btnBack").addEventListener("click", () => { if (!state.busy) go("home"); });
+
+function renderCta(name) {
+  const w = $("ctaInner");
+  if (name === "home") {
+    w.innerHTML = '<button class="btn ghost" id="btnSample" type="button">샘플 대화로 먼저 체험하기</button>';
+    $("btnSample").addEventListener("click", () => loadFile(SAMPLE_TXT, "샘플 대화.txt"));
+  } else if (name === "confirm") {
+    w.innerHTML = '<button class="btn primary" id="btnAnalyze" type="button">분석 시작</button>';
+    const b = $("btnAnalyze");
+    b.disabled = !state.victim;
+    b.addEventListener("click", startAnalysis);
+  } else if (name === "result") {
+    w.innerHTML = '<button class="btn ghost" id="btnAgain" type="button">다른 대화 분석하기</button>';
+    $("btnAgain").addEventListener("click", () => go("home"));
+  } else {
+    w.innerHTML = "";
+  }
+}
+
+/* ── 업로드 ── */
+$("dropzone").addEventListener("click", () => $("fileInput").click());
+$("dropzone").addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); $("fileInput").click(); } });
+$("fileInput").addEventListener("change", (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  const r = new FileReader();
+  r.onload = () => loadFile(String(r.result), f.name);
+  r.readAsText(f);
+  e.target.value = "";
+});
+
+/* 드래그&드롭 업로드 */
+["dragenter", "dragover"].forEach((ev) => $("dropzone").addEventListener(ev, (e) => {
+  e.preventDefault();
+  $("dropzone").classList.add("drag");
+}));
+["dragleave", "drop"].forEach((ev) => $("dropzone").addEventListener(ev, (e) => {
+  e.preventDefault();
+  $("dropzone").classList.remove("drag");
+}));
+$("dropzone").addEventListener("drop", (e) => {
+  const f = e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files[0];
+  if (!f) return;
+  if (!/\.txt$/i.test(f.name) && f.type !== "text/plain") {
+    toast("텍스트(.txt) 파일만 올릴 수 있어요.");
+    return;
+  }
+  const r = new FileReader();
+  r.onload = () => loadFile(String(r.result), f.name);
+  r.readAsText(f);
+});
+// 카드 밖에 떨어뜨렸을 때 브라우저가 파일을 열어버리는 것 방지
+window.addEventListener("dragover", (e) => e.preventDefault());
+window.addEventListener("drop", (e) => e.preventDefault());
+
+/* 서버에 올려 세션을 만든다 — 파싱·참여자 집계는 서버가 한다 */
+async function loadFile(raw, name) {
+  if (state.busy) return;
+  state.busy = true;
+  try {
+    const res = await fetch("/api/sessions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ rawText: raw, source: "kakao_export" }),
+    });
+    if (res.status === 400) throw new Error("대화 형식을 읽지 못했어요. 내보내기 원본 파일인지 확인해 주세요.");
+    if (!res.ok) throw new Error("서버에 연결하지 못했어요 (" + res.status + ")");
+    state.session = await res.json();
+    state.fileName = name;
+    state.analysis = null;
+    state.victim = null;
+    state.room = senders().length <= 2 ? "dm" : "group";
+    renderConfirm();
+    go("confirm");
+  } catch (e) {
+    toast(e.message);
+  }
+  state.busy = false;
+}
+
+/* ── 확인 화면 ── */
+function fmtDate(iso) { return iso.slice(5, 7).replace(/^0/, "") + "월 " + iso.slice(8, 10).replace(/^0/, "") + "일"; }
+const FORMAT_LABEL = { kakao_pc: "PC", kakao_mobile_dm: "모바일 1:1", kakao_mobile_group: "모바일 그룹" };
+function renderConfirm() {
+  const s = state.session;
+  const names = senders();
+  $("confirmSub").textContent = state.fileName + " · 아래 내용이 맞는지 확인해 주세요.";
+  $("fileMeta").innerHTML =
+    '<div><div class="k">메시지</div><div class="v num">' + s.messageCount + "건</div></div>" +
+    '<div><div class="k">기간</div><div class="v num">' + (s.period ? fmtDate(s.period.from) + " – " + fmtDate(s.period.to) : "-") + "</div></div>" +
+    '<div><div class="k">참여자</div><div class="v num">' + names.length + "명</div></div>" +
+    '<div><div class="k">형식</div><div class="v num">' + (FORMAT_LABEL[s.format] || s.format) + "</div></div>";
+
+  const rooms = [["dm", "1:1 대화"], ["group", "단체 대화방"], ["public", "공개 게시판"]];
+  $("roomChips").innerHTML = rooms.map(([v, l]) =>
+    '<button class="chip' + (state.room === v ? " sel" : "") + '" data-v="' + v + '" type="button">' + l + "</button>").join("");
+  $("roomChips").querySelectorAll(".chip").forEach((c) =>
+    c.addEventListener("click", () => { state.room = c.dataset.v; renderConfirm(); }));
+
+  $("victimChips").innerHTML = names.map((n) =>
+    '<button class="chip' + (state.victim === n ? " sel" : "") + '" type="button">' + esc(n) + "</button>").join("");
+  $("victimChips").querySelectorAll(".chip").forEach((c, i) =>
+    c.addEventListener("click", () => { state.victim = names[i]; renderConfirm(); }));
+
+  renderCta("confirm");
+}
+
+/* ── 분석 — 실서버 호출 ── */
+function serverContext() {
+  if (state.room === "dm") return "dm";
+  if (state.room === "public") return "public";
+  return senders().length >= 6 ? "large_group" : "small_group";
+}
+
+async function startAnalysis() {
+  if (state.busy) return;
+  state.busy = true;
+  go("progress");
+  const steps = [...$("steps").children];
+  steps.forEach((s) => { s.classList.remove("run", "done"); s.querySelector(".note").textContent = ""; });
+
+  const setRun = (i) => {
+    for (let k = 0; k < i; k++) if (!steps[k].classList.contains("done")) steps[k].classList.replace("run", "done") || steps[k].classList.add("done");
+    steps[i].classList.remove("done");
+    steps[i].classList.add("run");
+  };
+  const setDone = (i, note) => {
+    steps[i].classList.remove("run");
+    steps[i].classList.add("done");
+    if (note) steps[i].querySelector(".note").textContent = note;
+  };
+
+  try {
+    const res = await fetch("/api/analyses", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionIds: [state.session.sessionId], context: serverContext(), victimName: state.victim }),
+    });
+    if (!res.ok || !res.body) throw new Error("서버에 연결하지 못했어요 (" + res.status + ")");
+
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "", result = null, error = null;
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let nl;
+      while ((nl = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, nl).trim();
+        buf = buf.slice(nl + 1);
+        if (!line) continue;
+        const ev = JSON.parse(line);
+        if (ev.type === "stage") {
+          if (ev.stage === "anonymize") setRun(0);
+          if (ev.stage === "screen") { setDone(0); setRun(1); }
+          if (ev.stage === "screen_done") { setDone(1, "후보 " + ev.candidates + "건"); setRun(2); }
+          if (ev.stage === "match_done") { setDone(2, "판례 " + ev.precedents + "건"); }
+          if (ev.stage === "judge") setRun(3);
+          if (ev.stage === "judge_done") { setDone(3, "확정 " + ev.flagged + "건"); setRun(4); }
+        } else if (ev.type === "result") {
+          result = ev;
+        } else if (ev.type === "error") {
+          error = ev.message;
+        }
+      }
+    }
+    if (error) throw new Error(error);
+    if (!result) throw new Error("분석 결과를 받지 못했어요");
+
+    setDone(4, "완료");
+    state.analysis = result;
+    setTimeout(() => { renderResult(); go("result"); state.busy = false; }, 500);
+  } catch (e) {
+    state.busy = false;
+    toast(e.message);
+    go("confirm");
+  }
+}
+
+/* ── 결과 ── */
+const SEV = { "즉시조치": ["s3", "var(--sev-3)"], "주의": ["s2", "var(--sev-2)"], "관찰": ["s1", "var(--sev-1)"] };
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+function renderResult() {
+  const a = state.analysis;
+  const flagged = a.utterances;
+  $("resultSub").textContent = state.fileName + " · " + state.session.messageCount + "건 분석";
+
+  if (flagged.length === 0) {
+    $("rCount").innerHTML = '피해로 볼 내용이<br>발견되지 않았어요';
+    $("rCount").style.fontSize = "22px";
+    $("rPeriod").textContent = "";
+    $("rRepeat").hidden = true;
+    $("sevBar").innerHTML = "";
+    $("sevLegend").innerHTML = "";
+    $("typeChips").innerHTML = '<span class="stat-chip">해당 없음</span>';
+    $("patternChips").innerHTML = '<span class="stat-chip">해당 없음</span>';
+    $("senderChips").innerHTML = '<span class="stat-chip">해당 없음</span>';
+    $("listLabel").textContent = "피해 내역";
+    $("itemList").innerHTML = "";
+    return;
+  }
+
+  const times = flagged.flatMap((f) => f.messages.map((m) => m.time)).sort();
+  const days = new Set(times.map((t) => t.slice(0, 10))).size;
+  $("rCount").style.fontSize = "";
+  $("rCount").innerHTML = flagged.length + '<small> 건의 피해 확인</small>';
+  $("rPeriod").textContent = times[0].slice(0, 10).replace(/-/g, ".") + " – " + times[times.length - 1].slice(0, 10).replace(/-/g, ".") + " · " + days + "일에 걸침";
+  $("rRepeat").hidden = days < 3;
+
+  const sevCount = { "즉시조치": 0, "주의": 0, "관찰": 0 };
+  flagged.forEach((f) => sevCount[f.severity]++);
+  $("sevBar").innerHTML = Object.entries(sevCount).filter(([, v]) => v > 0).map(([k, v]) =>
+    '<span style="flex:' + v + ';background:' + SEV[k][1] + '"></span>').join("");
+  $("sevLegend").innerHTML = Object.entries(sevCount).map(([k, v]) =>
+    '<span><i style="background:' + SEV[k][1] + '"></i>' + k + ' <b class="num">' + v + "</b></span>").join("");
+
+  const typeCount = {};
+  flagged.forEach((f) => f.harmTypes.forEach((t) => { typeCount[t] = (typeCount[t] || 0) + 1; }));
+  $("typeChips").innerHTML = Object.entries(typeCount).sort((a, b) => b[1] - a[1]).map(([k, v]) =>
+    '<span class="stat-chip">' + k + ' <b class="num">' + v + "</b></span>").join("");
+
+  $("patternChips").innerHTML = a.patterns.length
+    ? a.patterns.map((p) => '<span class="stat-chip warn">' + p + "</span>").join("")
+    : '<span class="stat-chip">해당 없음</span>';
+
+  const senderCount = {};
+  flagged.forEach((f) => f.messages.forEach((m) => { senderCount[m.sender] = (senderCount[m.sender] || 0) + 1; }));
+  $("senderChips").innerHTML = Object.entries(senderCount).sort((a, b) => b[1] - a[1]).map(([k, v]) =>
+    '<span class="stat-chip">' + esc(k) + ' <b class="num">' + v + "</b></span>").join("");
+
+  $("listLabel").textContent = "피해 내역 " + flagged.length + "건";
+  $("itemList").innerHTML = flagged.map((f) => {
+    const ms = f.messages;
+    const first = ms[0], last = ms[ms.length - 1];
+    const who = [...new Set(ms.map((m) => m.sender))].map(esc).join(", ");
+    const when = ms.length === 1
+      ? first.time.replace("T", " ") + " · " + esc(first.sender)
+      : first.time.replace("T", " ") + " ~ " + last.time.slice(5).replace("T", " ") + " · " + who + " · " + ms.length + "개";
+    const quote = ms.length === 1
+      ? '<div class="msg">“' + esc(first.text) + "”</div>"
+      : '<div class="msg seg">' + ms.map((m) =>
+          '<div><span class="qmeta num">' + m.time.slice(5, 16).replace("T", " ") + " " + esc(m.sender) + "</span>" + esc(m.text) + "</div>").join("") + "</div>";
+    return '<div class="item ' + SEV[f.severity][0] + '">' +
+      '<div class="head num">' + when +
+      '<span class="sev">' + f.severity + "</span></div>" +
+      quote +
+      '<div class="types">' + f.harmTypes.join(" · ") + "</div>" +
+      '<div class="why">' + esc(f.reason) + "</div></div>";
+  }).join("");
+}
+
+/* ── 다운로드 ── */
+function download(blob, name) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+}
+$("dlPdf").addEventListener("click", async () => {
+  if (!state.analysis) return;
+  toast("정리 문서를 만들고 있어요…");
+  try {
+    const res = await fetch("/api/analyses/" + encodeURIComponent(state.analysis.analysisId) + "/report?legal=true");
+    if (!res.ok) throw new Error("문서 생성에 실패했어요 (" + res.status + ")");
+    download(await res.blob(), "피해정리문서.pdf");
+    toast("정리 문서를 저장했어요");
+  } catch (e) { toast(e.message); }
+});
+$("dlJson").addEventListener("click", () => {
+  if (!state.analysis) return;
+  download(new Blob([JSON.stringify(state.analysis, null, 2)], { type: "application/json" }), "분석데이터.json");
+  toast("분석 데이터를 저장했어요");
+});
+
+let toastTimer;
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 3000);
+}
+
+renderCta("home");
+</script>
+
+</body>
+</html>
