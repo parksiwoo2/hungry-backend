@@ -84,6 +84,11 @@ export interface AnalysisListItemResponse {
   patterns: string[];
 }
 
+/** GET /api/analyses — 노션 명세대로 배열을 analyses 키로 감싼다 */
+export interface AnalysisListResponse {
+  analyses: AnalysisListItemResponse[];
+}
+
 /** 검증을 통과해 실행만 남은 분석 — 컨트롤러는 이걸 받은 뒤에 스트림을 연다 */
 export interface PreparedAnalysis {
   session: SessionRecord;
@@ -202,12 +207,9 @@ export class AnalysesService {
     return AnalysesService.toResponse(a, sessions);
   }
 
-  async list(
-    limit: number,
-    offset: number,
-  ): Promise<AnalysisListItemResponse[]> {
+  async list(limit: number, offset: number): Promise<AnalysisListResponse> {
     const rows = await this.store.listAnalyses(limit, offset);
-    return rows.map((r) => ({
+    const analyses = rows.map((r) => ({
       analysisId: r.id,
       status: r.status,
       createdAt: r.createdAt,
@@ -217,6 +219,7 @@ export class AnalysesService {
       urgentCount: r.urgentCount,
       patterns: r.patterns,
     }));
+    return { analyses };
   }
 
   async remove(id: string): Promise<void> {

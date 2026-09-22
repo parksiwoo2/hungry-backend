@@ -18,7 +18,7 @@ export class CreateAnalysisDto {
   @IsString({ each: true })
   sessionIds!: string[];
 
-  @IsIn(CONTEXTS)
+  @IsIn(CONTEXTS, { message: `context는 ${CONTEXTS.join(' | ')} 중 하나` })
   context!: (typeof CONTEXTS)[number];
 
   @IsString()

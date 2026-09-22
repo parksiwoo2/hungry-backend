@@ -3,10 +3,11 @@
  * 저장소는 메모리 SQLite, PDF 생성기는 스텁(실제 PDF는 서버 수동 E2E로 확인).
  */
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import { INestApplication } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { AppModule } from './../src/app.module';
+import { buildValidationPipe } from './../src/validation-pipe';
 import { SAFEGUARD_STORE } from './../src/safeguard/storage/safeguard-store';
 import { SqliteSafeguardStore } from './../src/safeguard/storage/sqlite-safeguard-store';
 import { SafeguardAnalysisService } from './../src/safeguard/safeguard-analysis.service';
@@ -58,9 +59,7 @@ describe('Safeguard API (e2e)', () => {
       .compile();
 
     app = moduleFixture.createNestApplication();
-    app.useGlobalPipes(
-      new ValidationPipe({ whitelist: true, transform: true }),
-    );
+    app.useGlobalPipes(buildValidationPipe());
     await app.init();
 
     // jest(CommonJS)는 puppeteer(ESM) 동적 import 를 못 한다 — PDF 생성기만 스텁, 라우트·헤더는 실제
@@ -137,8 +136,8 @@ describe('Safeguard API (e2e)', () => {
       sessionId = (r.body as { sessionId: string }).sessionId;
     });
 
-    it('POST — 잘못된 context는 400 (스트림 열기 전)', () => {
-      return request(app.getHttpServer())
+    it('POST — 잘못된 context는 400 (스트림 열기 전), message는 노션 명세의 한 문장', async () => {
+      const res = await request(app.getHttpServer())
         .post('/api/analyses')
         .send({
           sessionIds: [sessionId],
@@ -146,6 +145,9 @@ describe('Safeguard API (e2e)', () => {
           victimName: '윤아',
         })
         .expect(400);
+      expect((res.body as { message: unknown }).message).toBe(
+        'context는 dm | small_group | large_group | public 중 하나',
+      );
     });
 
     it('POST — 없는 세션은 404, 참여자가 아닌 피해자는 400', async () => {
@@ -221,8 +223,12 @@ describe('Safeguard API (e2e)', () => {
       const list = await request(app.getHttpServer())
         .get('/api/analyses?limit=5')
         .expect(200);
-      expect((list.body as unknown[])[0]).toMatchObject({
+      // 노션 명세: 배열을 그대로 주지 않고 { analyses: [...] } 로 감싼다
+      const { analyses } = list.body as { analyses: unknown[] };
+      expect(Array.isArray(list.body)).toBe(false);
+      expect(analyses[0]).toMatchObject({
         analysisId,
+        status: 'done',
         utteranceCount: 1,
         urgentCount: 1,
         patterns: ['셔틀'],
