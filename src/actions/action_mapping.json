@@ -1,0 +1,74 @@
+{
+  "mapped_actions": [
+    {
+      "id": "CARD_EMERGENCY_REPORT",
+      "tier": 0,
+      "priority": 0,
+      "title": "긴급 신고하기",
+      "description": "지금 상황은 혼자 판단하기보다 즉시 도움을 요청해야 해요. 117(학교폭력 신고센터) 또는 112로 바로 연결할 수 있어요. 신고는 부끄러운 일이 아니라 나를 지키는 조치예요."
+    },
+    {
+      "id": "CARD_SEXCRIME_SUPPORT",
+      "tier": 0,
+      "priority": 1,
+      "title": "성범죄 관련 지원 연결",
+      "description": "성적 괴롭힘이나 불법 촬영물 관련 정황이 감지됐어요. 해바라기센터(1899-3075)나 117을 통해 전문 기관의 도움을 받을 수 있어요. 당신의 잘못이 아니에요."
+    },
+    {
+      "id": "CARD_NO_RETALIATION",
+      "tier": 1,
+      "priority": 10,
+      "title": "맞대응하지 않기",
+      "description": "화가 나더라도 똑같이 맞받아치면 상황이 더 커질 수 있어요. 지금은 답장하지 않는 것만으로도 충분해요. 잘못은 시비를 건 쪽에 있어요."
+    },
+    {
+      "id": "CARD_BACKUP_EVIDENCE",
+      "tier": 1,
+      "priority": 11,
+      "title": "대화 내용 백업/캡처해두기",
+      "description": "지금 상황이 나중에 어떻게 흘러가든, 기록이 남아있으면 도움이 돼요. 대화를 캡처하거나 내보내기 해서 미리 저장해두세요."
+    },
+    {
+      "id": "CARD_NO_LEAVE_CHATROOM",
+      "tier": 1,
+      "priority": 12,
+      "title": "대화방 나가기(삭제) 금지",
+      "description": "지금 대화방을 나가거나 대화 내용을 지우고 싶겠지만, 그러면 중요한 증거가 함께 사라질 수 있어요. 신고나 상담이 끝날 때까지는 그대로 남겨두는 게 좋아요."
+    },
+    {
+      "id": "CARD_MUTE_NOTIFICATION",
+      "tier": 2,
+      "priority": 20,
+      "title": "알림 끄기",
+      "description": "계속 오는 메시지 알림 때문에 마음이 더 힘들 수 있어요. 대화방은 지우지 말고, 알림만 꺼두면 조금 편해질 거예요."
+    },
+    {
+      "id": "CARD_NO_MONEY_TRANSFER",
+      "tier": 2,
+      "priority": 21,
+      "title": "송금 금지",
+      "description": "돈을 요구받았다면 지금 바로 보내지 마세요. 요구에 응하면 같은 일이 반복될 가능성이 높아요. 먼저 어른이나 117에 상황을 알려주세요."
+    },
+    {
+      "id": "CARD_NO_MEETING",
+      "tier": 2,
+      "priority": 22,
+      "title": "직접 만나지 않기",
+      "description": "상대가 직접 만나자고 하더라도 혼자 나가지 마세요. 대면 상황은 위험할 수 있어요. 꼭 만나야 한다면 반드시 어른과 함께, 또는 공개된 장소에서만요."
+    },
+    {
+      "id": "CARD_INFORM_ADULT",
+      "tier": 2,
+      "priority": 23,
+      "title": "어른에게 알리기",
+      "description": "혼자 감당하지 않아도 돼요. 부모님, 담임 선생님, 학교 상담 선생님 중 편하게 이야기할 수 있는 분께 지금 상황을 알려주세요."
+    },
+    {
+      "id": "CARD_CLEAR_REFUSAL",
+      "tier": 2,
+      "priority": 24,
+      "title": "1회의 명확한 거부 의사 표명",
+      "description": "계속 대응하지 않는 대신, 한 번은 '그만해 줘', '싫어'처럼 명확하게 거부 의사를 남겨두는 것도 나중에 상황을 설명할 때 도움이 될 수 있어요. 이후에는 다시 답하지 마세요."
+    }
+  ]
+}
