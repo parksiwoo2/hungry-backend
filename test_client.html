@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>행동 제시 API 테스트</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #f0f2f5;
+      color: #1a1a2e;
+      min-height: 100vh;
+      padding: 40px 16px;
+    }
+
+    .container {
+      max-width: 680px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    h1 {
+      font-size: 22px;
+      font-weight: 700;
+      margin-bottom: 4px;
+    }
+    .subtitle {
+      font-size: 13px;
+      color: #888;
+      margin-bottom: 28px;
+    }
+
+    /* Request Panel */
+    .panel {
+      background: #fff;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.07);
+      margin-bottom: 24px;
+    }
+    .panel-label {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #999;
+      margin-bottom: 12px;
+    }
+
+    .input-row {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .endpoint-badge {
+      font-size: 12px;
+      font-weight: 600;
+      background: #eaf3ff;
+      color: #2d7ff9;
+      border-radius: 6px;
+      padding: 10px 12px;
+      white-space: nowrap;
+      border: 1px solid #c7deff;
+    }
+    input[type="text"] {
+      flex: 1;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+      background: #fafafa;
+    }
+    input[type="text"]:focus { border-color: #2d7ff9; background: #fff; }
+
+    button.send-btn {
+      background: #2d7ff9;
+      color: #fff;
+      border: none;
+      border-radius: 10px;
+      padding: 10px 22px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      white-space: nowrap;
+    }
+    button.send-btn:hover { background: #1a6ce0; }
+    button.send-btn:active { transform: scale(0.97); }
+    button.send-btn:disabled { background: #a0c0f7; cursor: not-allowed; }
+
+    /* Status Bar */
+    .status-bar {
+      font-size: 12px;
+      margin-top: 12px;
+      padding: 8px 12px;
+      border-radius: 8px;
+      display: none;
+    }
+    .status-bar.loading { display: block; background: #f0f4ff; color: #2d7ff9; }
+    .status-bar.success { display: block; background: #edfaf3; color: #1a7c4a; }
+    .status-bar.error   { display: block; background: #fff0f0; color: #c0392b; }
+
+    /* Raw JSON Toggle */
+    .raw-toggle {
+      font-size: 12px;
+      color: #2d7ff9;
+      cursor: pointer;
+      text-decoration: underline;
+      margin-bottom: 10px;
+      display: none;
+    }
+    pre {
+      background: #1e1e2e;
+      color: #cdd6f4;
+      border-radius: 10px;
+      padding: 16px;
+      font-size: 12px;
+      overflow-x: auto;
+      white-space: pre-wrap;
+      word-break: break-all;
+      display: none;
+      margin-bottom: 20px;
+    }
+
+    /* Cards */
+    .section-title {
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #999;
+      margin-bottom: 12px;
+      padding-left: 2px;
+    }
+
+    .cards-wrapper { display: flex; flex-direction: column; gap: 12px; }
+
+    .card {
+      background: #fff;
+      border-radius: 14px;
+      padding: 18px 20px;
+      box-shadow: 0 1px 6px rgba(0,0,0,0.06);
+      border-left: 4px solid transparent;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+      transition: transform 0.15s;
+    }
+    .card:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
+
+    /* tier별 색상 */
+    .card[data-tier="0"] { border-left-color: #e74c3c; background: #fff8f8; }
+    .card[data-tier="1"] { border-left-color: #2d7ff9; }
+    .card[data-tier="2"] { border-left-color: #8e44ad; }
+
+    .card-icon {
+      font-size: 22px;
+      flex-shrink: 0;
+      width: 36px;
+      text-align: center;
+      padding-top: 2px;
+    }
+    .card-content { flex: 1; }
+    .card-meta {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: #1a1a2e;
+    }
+    .badge {
+      font-size: 10px;
+      font-weight: 700;
+      padding: 2px 7px;
+      border-radius: 20px;
+      letter-spacing: 0.04em;
+    }
+    .badge-tier0 { background: #fde8e8; color: #c0392b; }
+    .badge-tier1 { background: #e8efff; color: #2d7ff9; }
+    .badge-tier2 { background: #f0e8ff; color: #8e44ad; }
+    .badge-priority { background: #f0f0f0; color: #666; }
+
+    .card-desc {
+      font-size: 13px;
+      color: #555;
+      line-height: 1.6;
+      margin-top: 4px;
+    }
+    .card-id {
+      font-size: 10px;
+      color: #bbb;
+      font-family: monospace;
+      margin-top: 6px;
+    }
+
+    /* Empty / Initial State */
+    .placeholder {
+      text-align: center;
+      color: #bbb;
+      font-size: 14px;
+      padding: 40px 0;
+    }
+    .placeholder span { font-size: 36px; display: block; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h1>🛡️ 행동 제시 API 테스트</h1>
+  <p class="subtitle">GET /analyses/{analysisId}/actions</p>
+
+  <!-- Request Panel -->
+  <div class="panel">
+    <div class="panel-label">요청 파라미터</div>
+    <div class="input-row">
+      <span class="endpoint-badge">GET</span>
+      <input type="text" id="analysisIdInput" placeholder="analysisId 입력 (예: ana_01J9YTEST)" value="ana_01J9YTEST" />
+      <button class="send-btn" id="sendBtn" onclick="fetchActions()">요청</button>
+    </div>
+    <div class="status-bar" id="statusBar"></div>
+  </div>
+
+  <!-- Raw JSON -->
+  <div id="rawToggle" class="raw-toggle" onclick="toggleRaw()">▶ 원본 JSON 응답 보기</div>
+  <pre id="rawJson"></pre>
+
+  <!-- Result Cards -->
+  <div id="resultArea">
+    <div class="placeholder">
+      <span>📋</span>
+      analysisId를 입력하고 요청 버튼을 눌러주세요.
+    </div>
+  </div>
+</div>
+
+<script>
+  const TIER_META = {
+    0: { label: '긴급', cssClass: 'badge-tier0', icon: '🚨' },
+    1: { label: '기본 수칙', cssClass: 'badge-tier1', icon: '🛡️' },
+    2: { label: '상황별 대처', cssClass: 'badge-tier2', icon: '💡' },
+  };
+
+  let rawVisible = false;
+
+  async function fetchActions() {
+    const analysisId = document.getElementById('analysisIdInput').value.trim();
+    if (!analysisId) { alert('analysisId를 입력해주세요.'); return; }
+
+    const btn = document.getElementById('sendBtn');
+    const statusBar = document.getElementById('statusBar');
+    const resultArea = document.getElementById('resultArea');
+
+    btn.disabled = true;
+    setStatus('loading', `요청 중... GET /analyses/${analysisId}/actions`);
+    resultArea.innerHTML = '';
+    document.getElementById('rawToggle').style.display = 'none';
+    document.getElementById('rawJson').style.display = 'none';
+
+    try {
+      const res = await fetch(`http://localhost:3000/analyses/${analysisId}/actions`);
+      const data = await res.json();
+
+      // Raw JSON 표시
+      document.getElementById('rawJson').textContent = JSON.stringify(data, null, 2);
+      document.getElementById('rawToggle').style.display = 'block';
+
+      if (!res.ok) {
+        setStatus('error', `❌ ${res.status} ${res.statusText} — ${data.message ?? ''}`);
+        resultArea.innerHTML = `<div class="placeholder"><span>⚠️</span>${data.message ?? '오류가 발생했습니다.'}</div>`;
+        return;
+      }
+
+      const actions = data.actions ?? [];
+      setStatus('success', `✅ ${res.status} OK — 행동 카드 ${actions.length}개 수신`);
+
+      if (actions.length === 0) {
+        resultArea.innerHTML = `<div class="placeholder"><span>🤷</span>매핑된 행동 카드가 없습니다.</div>`;
+        return;
+      }
+
+      // Tier별로 섹션 분리
+      const grouped = { 0: [], 1: [], 2: [] };
+      actions.forEach(a => (grouped[a.tier] ?? []).push(a));
+
+      let html = '';
+      for (const tier of [0, 1, 2]) {
+        if (!grouped[tier] || grouped[tier].length === 0) continue;
+        const meta = TIER_META[tier];
+        html += `<div class="section-title">${meta.icon} Tier ${tier} · ${meta.label}</div>`;
+        html += `<div class="cards-wrapper" style="margin-bottom:24px">`;
+        grouped[tier].forEach(action => {
+          html += `
+            <div class="card" data-tier="${action.tier}">
+              <div class="card-icon">${meta.icon}</div>
+              <div class="card-content">
+                <div class="card-meta">
+                  <span class="card-title">${action.title}</span>
+                  <span class="badge ${meta.cssClass}">Tier ${action.tier}</span>
+                  <span class="badge badge-priority">P${action.priority}</span>
+                </div>
+                <div class="card-desc">${action.description}</div>
+                <div class="card-id">${action.id}</div>
+              </div>
+            </div>`;
+        });
+        html += `</div>`;
+      }
+      resultArea.innerHTML = html;
+
+    } catch (err) {
+      setStatus('error', `❌ 서버 연결 실패 — 백엔드가 실행 중인지 확인해주세요. (${err.message})`);
+      resultArea.innerHTML = `<div class="placeholder"><span>🔌</span>서버에 연결할 수 없습니다.<br><small>npm run start로 백엔드를 실행해주세요.</small></div>`;
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
+  function setStatus(type, msg) {
+    const bar = document.getElementById('statusBar');
+    bar.className = `status-bar ${type}`;
+    bar.textContent = msg;
+  }
+
+  function toggleRaw() {
+    rawVisible = !rawVisible;
+    const pre = document.getElementById('rawJson');
+    const toggle = document.getElementById('rawToggle');
+    pre.style.display = rawVisible ? 'block' : 'none';
+    toggle.textContent = rawVisible ? '▼ 원본 JSON 숨기기' : '▶ 원본 JSON 응답 보기';
+  }
+
+  // Enter 키로도 요청 가능
+  document.getElementById('analysisIdInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') fetchActions();
+  });
+</script>
+
+</body>
+</html>
