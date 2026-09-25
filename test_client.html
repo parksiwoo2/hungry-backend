@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>행동 제시 API 테스트</title>
+  <title>Hungry Backend 테스트 클라이언트</title>
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -12,33 +12,53 @@
       background: #f0f2f5;
       color: #1a1a2e;
       min-height: 100vh;
-      padding: 40px 16px;
     }
 
-    .container {
-      max-width: 680px;
-      margin: 0 auto;
+    /* ── Tab Navigation ── */
+    .tab-nav {
+      background: #fff;
+      border-bottom: 1px solid #e8e8e8;
+      display: flex;
+      gap: 0;
+      padding: 0 24px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+      box-shadow: 0 1px 8px rgba(0,0,0,0.06);
     }
+    .tab-btn {
+      padding: 16px 24px;
+      font-size: 14px;
+      font-weight: 600;
+      color: #999;
+      border: none;
+      background: none;
+      cursor: pointer;
+      border-bottom: 3px solid transparent;
+      transition: color 0.2s, border-color 0.2s;
+      white-space: nowrap;
+    }
+    .tab-btn.active {
+      color: #2d7ff9;
+      border-bottom-color: #2d7ff9;
+    }
+    .tab-btn:hover:not(.active) { color: #555; }
 
-    /* Header */
-    h1 {
-      font-size: 22px;
-      font-weight: 700;
-      margin-bottom: 4px;
-    }
-    .subtitle {
-      font-size: 13px;
-      color: #888;
-      margin-bottom: 28px;
-    }
+    .tab-content { display: none; padding: 32px 16px; }
+    .tab-content.active { display: block; }
+    .container { max-width: 720px; margin: 0 auto; }
 
-    /* Request Panel */
+    /* ── Section Header ── */
+    .page-title { font-size: 22px; font-weight: 700; margin-bottom: 4px; }
+    .subtitle { font-size: 13px; color: #888; margin-bottom: 28px; }
+
+    /* ── Panel ── */
     .panel {
       background: #fff;
       border-radius: 16px;
       padding: 24px;
       box-shadow: 0 2px 12px rgba(0,0,0,0.07);
-      margin-bottom: 24px;
+      margin-bottom: 20px;
     }
     .panel-label {
       font-size: 11px;
@@ -48,12 +68,7 @@
       color: #999;
       margin-bottom: 12px;
     }
-
-    .input-row {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
+    .input-row { display: flex; gap: 10px; align-items: center; }
     .endpoint-badge {
       font-size: 12px;
       font-weight: 600;
@@ -64,6 +79,7 @@
       white-space: nowrap;
       border: 1px solid #c7deff;
     }
+    .endpoint-badge.post { background: #fff0ea; color: #e07000; border-color: #ffd0aa; }
     input[type="text"] {
       flex: 1;
       border: 1.5px solid #e0e0e0;
@@ -92,7 +108,7 @@
     button.send-btn:active { transform: scale(0.97); }
     button.send-btn:disabled { background: #a0c0f7; cursor: not-allowed; }
 
-    /* Status Bar */
+    /* ── Status Bar ── */
     .status-bar {
       font-size: 12px;
       margin-top: 12px;
@@ -104,7 +120,7 @@
     .status-bar.success { display: block; background: #edfaf3; color: #1a7c4a; }
     .status-bar.error   { display: block; background: #fff0f0; color: #c0392b; }
 
-    /* Raw JSON Toggle */
+    /* ── Raw JSON ── */
     .raw-toggle {
       font-size: 12px;
       color: #2d7ff9;
@@ -126,7 +142,7 @@
       margin-bottom: 20px;
     }
 
-    /* Cards */
+    /* ── Action Cards ── */
     .section-title {
       font-size: 11px;
       font-weight: 600;
@@ -136,9 +152,7 @@
       margin-bottom: 12px;
       padding-left: 2px;
     }
-
     .cards-wrapper { display: flex; flex-direction: column; gap: 12px; }
-
     .card {
       background: #fff;
       border-radius: 14px;
@@ -151,103 +165,445 @@
       transition: transform 0.15s;
     }
     .card:hover { transform: translateY(-2px); box-shadow: 0 4px 14px rgba(0,0,0,0.1); }
-
-    /* tier별 색상 */
     .card[data-tier="0"] { border-left-color: #e74c3c; background: #fff8f8; }
     .card[data-tier="1"] { border-left-color: #2d7ff9; }
     .card[data-tier="2"] { border-left-color: #8e44ad; }
-
-    .card-icon {
-      font-size: 22px;
-      flex-shrink: 0;
-      width: 36px;
-      text-align: center;
-      padding-top: 2px;
-    }
+    .card-icon { font-size: 22px; flex-shrink: 0; width: 36px; text-align: center; padding-top: 2px; }
     .card-content { flex: 1; }
-    .card-meta {
-      display: flex;
-      gap: 6px;
-      align-items: center;
-      margin-bottom: 4px;
-    }
-    .card-title {
-      font-size: 15px;
-      font-weight: 700;
-      color: #1a1a2e;
-    }
-    .badge {
-      font-size: 10px;
-      font-weight: 700;
-      padding: 2px 7px;
-      border-radius: 20px;
-      letter-spacing: 0.04em;
-    }
+    .card-meta { display: flex; gap: 6px; align-items: center; margin-bottom: 4px; }
+    .card-title { font-size: 15px; font-weight: 700; color: #1a1a2e; }
+    .badge { font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 20px; letter-spacing: 0.04em; }
     .badge-tier0 { background: #fde8e8; color: #c0392b; }
     .badge-tier1 { background: #e8efff; color: #2d7ff9; }
     .badge-tier2 { background: #f0e8ff; color: #8e44ad; }
     .badge-priority { background: #f0f0f0; color: #666; }
+    .card-desc { font-size: 13px; color: #555; line-height: 1.6; margin-top: 4px; }
+    .card-id { font-size: 10px; color: #bbb; font-family: monospace; margin-top: 6px; }
 
-    .card-desc {
-      font-size: 13px;
-      color: #555;
-      line-height: 1.6;
-      margin-top: 4px;
-    }
-    .card-id {
-      font-size: 10px;
-      color: #bbb;
-      font-family: monospace;
-      margin-top: 6px;
-    }
-
-    /* Empty / Initial State */
-    .placeholder {
-      text-align: center;
-      color: #bbb;
-      font-size: 14px;
-      padding: 40px 0;
-    }
+    /* ── Placeholder ── */
+    .placeholder { text-align: center; color: #bbb; font-size: 14px; padding: 40px 0; }
     .placeholder span { font-size: 36px; display: block; margin-bottom: 12px; }
+
+    /* ── Chat UI ── */
+    #chatBox {
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.08);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 560px;
+    }
+    .chat-header {
+      background: linear-gradient(135deg, #2d7ff9, #7c3aed);
+      padding: 20px 24px;
+      color: #fff;
+    }
+    .chat-header .bot-name { font-size: 17px; font-weight: 700; }
+    .chat-header .bot-sub { font-size: 12px; opacity: 0.75; margin-top: 2px; }
+    .session-info { font-size: 10px; font-family: monospace; opacity: 0.6; margin-top: 6px; word-break: break-all; }
+
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 20px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      background: #f8f9fb;
+    }
+
+    .msg-wrap { display: flex; gap: 8px; align-items: flex-end; }
+    .msg-wrap.user { flex-direction: row-reverse; }
+
+    .avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      font-size: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+    .avatar.bot { background: linear-gradient(135deg, #2d7ff9, #7c3aed); }
+    .avatar.user-av { background: #e8f0fe; }
+
+    .bubble {
+      max-width: 72%;
+      padding: 12px 16px;
+      border-radius: 18px;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+    .bubble.bot {
+      background: #fff;
+      color: #1a1a2e;
+      border-bottom-left-radius: 4px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.08);
+    }
+    .bubble.user {
+      background: #2d7ff9;
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+
+    /* Crisis 긴급 배너 */
+    .crisis-banner {
+      background: #fff2f2;
+      border: 1.5px solid #f5c6cb;
+      border-radius: 14px;
+      padding: 16px 18px;
+      margin: 8px 0;
+    }
+    .crisis-banner .crisis-title {
+      font-size: 14px;
+      font-weight: 700;
+      color: #c0392b;
+      margin-bottom: 10px;
+    }
+    .crisis-contacts { display: flex; flex-direction: column; gap: 8px; }
+    .contact-card {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #fff;
+      border-radius: 10px;
+      padding: 10px 14px;
+      box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+    .contact-name { font-size: 13px; font-weight: 600; color: #333; }
+    .contact-tel { font-size: 18px; font-weight: 800; color: #e74c3c; font-family: monospace; }
+
+    /* 입력창 */
+    .chat-input-area {
+      border-top: 1px solid #eee;
+      padding: 14px 16px;
+      background: #fff;
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    .chat-input-area input {
+      flex: 1;
+      border: 1.5px solid #e0e0e0;
+      border-radius: 24px;
+      padding: 10px 18px;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .chat-input-area input:focus { border-color: #2d7ff9; }
+    .chat-input-area input:disabled { background: #f5f5f5; }
+    .chat-send-btn {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: #2d7ff9;
+      border: none;
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .chat-send-btn:hover { background: #1a6ce0; }
+    .chat-send-btn:disabled { background: #a0c0f7; cursor: not-allowed; }
+    .chat-send-btn:active { transform: scale(0.93); }
+
+    /* 타이핑 인디케이터 */
+    .typing { display: flex; gap: 4px; align-items: center; padding: 4px 0; }
+    .typing span {
+      width: 7px; height: 7px; border-radius: 50%; background: #aaa;
+      animation: bounce 1.2s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: 0.2s; }
+    .typing span:nth-child(3) { animation-delay: 0.4s; }
+    @keyframes bounce {
+      0%, 80%, 100% { transform: translateY(0); opacity: 0.5; }
+      40% { transform: translateY(-6px); opacity: 1; }
+    }
+
+    /* 상담 시작 패널 */
+    #startPanel { margin-bottom: 20px; }
+    #chatArea { display: none; }
   </style>
 </head>
 <body>
 
-<div class="container">
-  <h1>🛡️ 행동 제시 API 테스트</h1>
-  <p class="subtitle">GET /analyses/{analysisId}/actions</p>
+<!-- Tab Navigation -->
+<nav class="tab-nav">
+  <button class="tab-btn active" onclick="switchTab('chatTab', this)">💬 AI 심리 상담 챗봇</button>
+  <button class="tab-btn" onclick="switchTab('actionsTab', this)">🛡️ 행동 제시 API</button>
+</nav>
 
-  <!-- Request Panel -->
-  <div class="panel">
-    <div class="panel-label">요청 파라미터</div>
-    <div class="input-row">
-      <span class="endpoint-badge">GET</span>
-      <input type="text" id="analysisIdInput" placeholder="analysisId 입력 (예: ana_01J9YTEST)" value="ana_01J9YTEST" />
-      <button class="send-btn" id="sendBtn" onclick="fetchActions()">요청</button>
+<!-- ═══════════════════════════════════════════ -->
+<!-- TAB 1: AI 챗봇 -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="tab-content active" id="chatTab">
+  <div class="container">
+    <h1 class="page-title">💬 AI 심리 상담 챗봇</h1>
+    <p class="subtitle">POST /api/chats/intro → /api/chats/messages</p>
+
+    <!-- 상담 시작 -->
+    <div class="panel" id="startPanel">
+      <div class="panel-label">상담 시작</div>
+      <div class="input-row">
+        <span class="endpoint-badge post">POST</span>
+        <input type="text" id="chatAnalysisId" placeholder="analysisId 입력 (예: ana_test_001)" value="ana_test_001" />
+        <button class="send-btn" id="startBtn" onclick="startChat()">상담 시작</button>
+      </div>
+      <div class="status-bar" id="chatStatus"></div>
     </div>
-    <div class="status-bar" id="statusBar"></div>
+
+    <!-- 채팅 UI -->
+    <div id="chatArea">
+      <div id="chatBox">
+        <div class="chat-header">
+          <div class="bot-name">🧡 안심이</div>
+          <div class="bot-sub">사이버폭력 피해 청소년 심리 상담사</div>
+          <div class="session-info" id="sessionInfo"></div>
+        </div>
+        <div class="messages" id="messages"></div>
+        <div class="chat-input-area">
+          <input type="text" id="chatInput" placeholder="메시지를 입력하세요..." disabled />
+          <button class="chat-send-btn" id="chatSendBtn" onclick="sendMessage()" disabled>➤</button>
+        </div>
+      </div>
+      <div style="margin-top:12px; text-align:center;">
+        <button class="send-btn" style="background:#888; font-size:12px; padding:8px 16px;" onclick="resetChat()">새 상담 시작</button>
+      </div>
+    </div>
   </div>
+</div>
 
-  <!-- Raw JSON -->
-  <div id="rawToggle" class="raw-toggle" onclick="toggleRaw()">▶ 원본 JSON 응답 보기</div>
-  <pre id="rawJson"></pre>
+<!-- ═══════════════════════════════════════════ -->
+<!-- TAB 2: 행동 제시 API -->
+<!-- ═══════════════════════════════════════════ -->
+<div class="tab-content" id="actionsTab">
+  <div class="container">
+    <h1 class="page-title">🛡️ 행동 제시 API 테스트</h1>
+    <p class="subtitle">GET /analyses/{analysisId}/actions</p>
 
-  <!-- Result Cards -->
-  <div id="resultArea">
-    <div class="placeholder">
-      <span>📋</span>
-      analysisId를 입력하고 요청 버튼을 눌러주세요.
+    <div class="panel">
+      <div class="panel-label">요청 파라미터</div>
+      <div class="input-row">
+        <span class="endpoint-badge">GET</span>
+        <input type="text" id="analysisIdInput" placeholder="analysisId 입력 (예: ana_test_001)" value="ana_test_001" />
+        <button class="send-btn" id="sendBtn" onclick="fetchActions()">요청</button>
+      </div>
+      <div class="status-bar" id="statusBar"></div>
+    </div>
+
+    <div id="rawToggle" class="raw-toggle" onclick="toggleRaw()">▶ 원본 JSON 응답 보기</div>
+    <pre id="rawJson"></pre>
+
+    <div id="resultArea">
+      <div class="placeholder">
+        <span>📋</span>
+        analysisId를 입력하고 요청 버튼을 눌러주세요.
+      </div>
     </div>
   </div>
 </div>
 
 <script>
+  // ── Tab Switch ──────────────────────────────
+  function switchTab(tabId, btn) {
+    document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(tabId).classList.add('active');
+    btn.classList.add('active');
+  }
+
+  // ═══════════════════════════════════════════
+  // 챗봇 탭 로직
+  // ═══════════════════════════════════════════
+  let currentSessionId = null;
+  let isChatLocked = false;
+
+  async function startChat() {
+    const analysisId = document.getElementById('chatAnalysisId').value.trim();
+    if (!analysisId) { alert('analysisId를 입력해주세요.'); return; }
+
+    const btn = document.getElementById('startBtn');
+    btn.disabled = true;
+    setChatStatus('loading', '상담을 시작하는 중...');
+
+    try {
+      const res = await fetch('http://localhost:3000/api/chats/intro', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ analysisId })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message ?? `HTTP ${res.status}`);
+
+      currentSessionId = data.sessionId;
+      isChatLocked = false;
+
+      // UI 전환
+      document.getElementById('startPanel').style.display = 'none';
+      document.getElementById('chatArea').style.display = 'block';
+      document.getElementById('sessionInfo').textContent = `Session: ${currentSessionId}`;
+
+      clearMessages();
+      appendBotMessage(data.greeting);
+      enableInput();
+      setChatStatus('', '');
+    } catch (err) {
+      setChatStatus('error', `❌ 상담 시작 실패 — ${err.message}`);
+      btn.disabled = false;
+    }
+  }
+
+  async function sendMessage() {
+    if (isChatLocked) return;
+    const input = document.getElementById('chatInput');
+    const userMessage = input.value.trim();
+    if (!userMessage) return;
+    if (!currentSessionId) return;
+
+    appendUserMessage(userMessage);
+    input.value = '';
+    disableInput();
+
+    const typingId = appendTyping();
+
+    try {
+      const res = await fetch('http://localhost:3000/api/chats/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: currentSessionId, userMessage })
+      });
+      const data = await res.json();
+      removeTyping(typingId);
+
+      if (!res.ok) throw new Error(data.message ?? `HTTP ${res.status}`);
+
+      appendBotMessage(data.reply);
+
+      if (data.isCrisis) {
+        isChatLocked = true;
+        appendCrisisBanner(data.emergencyContacts);
+        disableInput(true);
+      } else {
+        enableInput();
+      }
+    } catch (err) {
+      removeTyping(typingId);
+      appendBotMessage(`⚠️ 오류가 발생했습니다: ${err.message}`);
+      enableInput();
+    }
+  }
+
+  function resetChat() {
+    currentSessionId = null;
+    isChatLocked = false;
+    document.getElementById('startPanel').style.display = 'block';
+    document.getElementById('startBtn').disabled = false;
+    document.getElementById('chatArea').style.display = 'none';
+    setChatStatus('', '');
+    clearMessages();
+  }
+
+  // ── Message Helpers ──
+  function appendBotMessage(text) {
+    const wrap = document.createElement('div');
+    wrap.className = 'msg-wrap';
+    wrap.innerHTML = `
+      <div class="avatar bot">🧡</div>
+      <div class="bubble bot">${escHtml(text)}</div>`;
+    document.getElementById('messages').appendChild(wrap);
+    scrollToBottom();
+  }
+
+  function appendUserMessage(text) {
+    const wrap = document.createElement('div');
+    wrap.className = 'msg-wrap user';
+    wrap.innerHTML = `
+      <div class="avatar user-av">🙍</div>
+      <div class="bubble user">${escHtml(text)}</div>`;
+    document.getElementById('messages').appendChild(wrap);
+    scrollToBottom();
+  }
+
+  function appendTyping() {
+    const id = 'typing-' + Date.now();
+    const wrap = document.createElement('div');
+    wrap.className = 'msg-wrap';
+    wrap.id = id;
+    wrap.innerHTML = `
+      <div class="avatar bot">🧡</div>
+      <div class="bubble bot"><div class="typing"><span></span><span></span><span></span></div></div>`;
+    document.getElementById('messages').appendChild(wrap);
+    scrollToBottom();
+    return id;
+  }
+
+  function removeTyping(id) {
+    document.getElementById(id)?.remove();
+  }
+
+  function appendCrisisBanner(contacts) {
+    const div = document.createElement('div');
+    div.className = 'crisis-banner';
+    const list = (contacts || []).map(c => `
+      <div class="contact-card">
+        <span class="contact-name">${escHtml(c.name)}</span>
+        <span class="contact-tel">${escHtml(c.tel)}</span>
+      </div>`).join('');
+    div.innerHTML = `
+      <div class="crisis-title">🚨 지금 바로 도움을 요청해 주세요</div>
+      <div class="crisis-contacts">${list}</div>`;
+    document.getElementById('messages').appendChild(div);
+    scrollToBottom();
+  }
+
+  function clearMessages() { document.getElementById('messages').innerHTML = ''; }
+  function scrollToBottom() {
+    const m = document.getElementById('messages');
+    m.scrollTop = m.scrollHeight;
+  }
+  function enableInput() {
+    document.getElementById('chatInput').disabled = false;
+    document.getElementById('chatSendBtn').disabled = false;
+    document.getElementById('chatInput').focus();
+  }
+  function disableInput(permanent = false) {
+    document.getElementById('chatInput').disabled = true;
+    document.getElementById('chatSendBtn').disabled = true;
+    if (permanent) {
+      document.getElementById('chatInput').placeholder = '상담이 종료되었습니다.';
+    }
+  }
+  function setChatStatus(type, msg) {
+    const bar = document.getElementById('chatStatus');
+    bar.className = `status-bar${type ? ' ' + type : ''}`;
+    bar.textContent = msg;
+  }
+  function escHtml(str) {
+    return String(str)
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  // Enter 전송
+  document.getElementById('chatInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) sendMessage();
+  });
+
+  // ═══════════════════════════════════════════
+  // 행동 제시 탭 로직 (기존)
+  // ═══════════════════════════════════════════
   const TIER_META = {
     0: { label: '긴급', cssClass: 'badge-tier0', icon: '🚨' },
     1: { label: '기본 수칙', cssClass: 'badge-tier1', icon: '🛡️' },
     2: { label: '상황별 대처', cssClass: 'badge-tier2', icon: '💡' },
   };
-
   let rawVisible = false;
 
   async function fetchActions() {
@@ -268,7 +624,6 @@
       const res = await fetch(`http://localhost:3000/analyses/${analysisId}/actions`);
       const data = await res.json();
 
-      // Raw JSON 표시
       document.getElementById('rawJson').textContent = JSON.stringify(data, null, 2);
       document.getElementById('rawToggle').style.display = 'block';
 
@@ -286,13 +641,12 @@
         return;
       }
 
-      // Tier별로 섹션 분리
       const grouped = { 0: [], 1: [], 2: [] };
       actions.forEach(a => (grouped[a.tier] ?? []).push(a));
 
       let html = '';
       for (const tier of [0, 1, 2]) {
-        if (!grouped[tier] || grouped[tier].length === 0) continue;
+        if (!grouped[tier]?.length) continue;
         const meta = TIER_META[tier];
         html += `<div class="section-title">${meta.icon} Tier ${tier} · ${meta.label}</div>`;
         html += `<div class="cards-wrapper" style="margin-bottom:24px">`;
@@ -328,7 +682,6 @@
     bar.className = `status-bar ${type}`;
     bar.textContent = msg;
   }
-
   function toggleRaw() {
     rawVisible = !rawVisible;
     const pre = document.getElementById('rawJson');
@@ -336,8 +689,6 @@
     pre.style.display = rawVisible ? 'block' : 'none';
     toggle.textContent = rawVisible ? '▼ 원본 JSON 숨기기' : '▶ 원본 JSON 응답 보기';
   }
-
-  // Enter 키로도 요청 가능
   document.getElementById('analysisIdInput').addEventListener('keydown', e => {
     if (e.key === 'Enter') fetchActions();
   });
