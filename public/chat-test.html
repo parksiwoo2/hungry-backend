@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hungry Backend — 챗봇 테스트 (임시)</title>
+<link rel="stylesheet" href="safeguard-theme.css">
+<style>
+  .appbar .spacer { flex: 1; }
+  .appbar .reset {
+    appearance: none; border: 1px solid var(--line); background: var(--surface); color: var(--ink-2);
+    font: inherit; font-size: 12.5px; font-weight: 600; padding: 5px 12px; border-radius: 999px; cursor: pointer;
+  }
+  .appbar .reset:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .appbar .reset[hidden] { display: none; }
+
+  .tag { display: inline-block; font-size: 11px; font-weight: 700; color: var(--sev-2); background: var(--sev-2-soft); padding: 2px 9px; border-radius: 999px; vertical-align: middle; margin-left: 6px; }
+  select.field { appearance: auto; }
+  .hint { color: var(--ink-3); font-size: 12.5px; margin: 8px 2px 0; }
+
+  /* 대화 */
+  #chat { padding-bottom: 130px; }
+  .meta { color: var(--ink-3); font-size: 12px; text-align: center; margin: 6px 0 14px; word-break: break-all; }
+  .msgs { display: flex; flex-direction: column; gap: 10px; }
+  .bubble {
+    max-width: 82%; padding: 10px 14px; border-radius: 18px; white-space: pre-wrap; overflow-wrap: anywhere;
+    font-size: 14.5px; line-height: 1.6; animation: rise .22s ease;
+  }
+  .bubble.ai { align-self: flex-start; background: var(--surface); border: 1px solid var(--line); border-bottom-left-radius: 6px; }
+  .bubble.me { align-self: flex-end; background: var(--accent); color: var(--accent-ink); border-bottom-right-radius: 6px; }
+  .bubble.sys { align-self: center; max-width: 92%; background: var(--sev-2-soft); color: var(--sev-2); font-size: 12.5px; font-weight: 600; border-radius: 12px; text-align: center; }
+  .bubble.typing { color: var(--ink-3); letter-spacing: .2em; }
+  .bubble.typing span { animation: pulse 1s ease-in-out infinite; }
+  .bubble.typing span:nth-child(2) { animation-delay: .15s; }
+  .bubble.typing span:nth-child(3) { animation-delay: .3s; }
+
+  /* 위기 */
+  .crisis { margin-top: 14px; background: var(--sev-3-soft); border: 1px solid var(--sev-3); border-radius: 16px; padding: 16px; }
+  .crisis h2 { margin: 0 0 4px; font-size: 16px; color: var(--sev-3); }
+  .crisis p { margin: 0 0 12px; font-size: 13.5px; color: var(--ink-2); }
+  .crisis a {
+    display: flex; justify-content: space-between; align-items: center; gap: 12px; text-decoration: none; color: var(--ink);
+    background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; margin-top: 8px; font-size: 14px; font-weight: 600;
+  }
+  .crisis a b { color: var(--sev-3); font-size: 16px; }
+  .crisis a:focus-visible { outline: 3px solid var(--sev-3); outline-offset: 2px; }
+
+  details.raw { margin-top: 16px; font-size: 12px; color: var(--ink-3); }
+  details.raw summary { cursor: pointer; }
+  details.raw pre { margin: 8px 0 0; padding: 10px 12px; background: var(--surface-2); border-radius: 10px; overflow: auto; max-height: 180px; color: var(--ink-2); font-size: 11.5px; white-space: pre-wrap; word-break: break-all; }
+
+  /* 입력창 */
+  .composer { display: flex; gap: 8px; align-items: flex-end; }
+  .composer textarea { resize: none; max-height: 120px; min-height: 46px; padding: 12px 14px; flex: 1; }
+  .composer textarea:disabled { opacity: .55; }
+  .composer .btn { width: auto; flex: none; padding: 12px 18px; }
+  .composer-note { text-align: center; font-size: 12px; color: var(--ink-3); }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="appbar">
+    <svg class="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 2.5 L20 5.5 V11 C20 16.5 16.6 20.4 12 21.8 C7.4 20.4 4 16.5 4 11 V5.5 Z" fill="var(--accent)" opacity=".14"/>
+      <path d="M12 2.5 L20 5.5 V11 C20 16.5 16.6 20.4 12 21.8 C7.4 20.4 4 16.5 4 11 V5.5 Z" stroke="var(--accent)" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M8.6 11.6 L11 14 L15.6 9.2" stroke="var(--accent)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="name">안심이 상담 <span class="tag">테스트</span></div>
+    <div class="spacer"></div>
+    <button class="reset" id="btnReset" type="button" hidden>새 상담</button>
+  </div>
+
+  <main>
+    <!-- 1. 시작 -->
+    <section class="screen on" id="scr-start">
+      <h1>상담 시작하기</h1>
+      <p class="sub">분석 결과를 맥락으로 주입한 상담 챗봇을 시험해요. 분석을 고르거나 ID를 직접 입력하세요.</p>
+      <form class="stack" id="startForm">
+        <div class="card">
+          <p class="label">완료된 분석</p>
+          <select class="field" id="pick" aria-label="완료된 분석 목록"><option value="">불러오는 중…</option></select>
+          <p class="hint" id="pickHint"></p>
+        </div>
+        <div class="card">
+          <p class="label">분석 ID</p>
+          <input class="field" id="analysisId" placeholder="ana_..." autocomplete="off" spellcheck="false">
+        </div>
+        <button class="btn primary" id="btnStart" type="submit">상담 시작</button>
+      </form>
+    </section>
+
+    <!-- 2. 대화 -->
+    <section class="screen" id="scr-chat">
+      <div id="chat">
+        <div class="meta" id="meta"></div>
+        <div class="msgs" id="msgs" role="log" aria-live="polite"></div>
+        <div id="crisisBox"></div>
+        <details class="raw" id="raw" hidden>
+          <summary>마지막 응답 원문</summary>
+          <pre id="rawPre"></pre>
+        </details>
+      </div>
+    </section>
+  </main>
+
+  <div class="cta-wrap" id="composerWrap" hidden>
+    <div class="cta-inner">
+      <form class="composer" id="composer">
+        <textarea class="field" id="input" rows="1" maxlength="2000" placeholder="메시지를 입력하세요" aria-label="메시지"></textarea>
+        <button class="btn primary" id="btnSend" type="submit">보내기</button>
+      </form>
+      <div class="composer-note" id="composerNote"></div>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+"use strict";
+/* ─────────────────────────────────────────────────────────────
+   챗봇 테스트 페이지 (임시) — /chat-test.html[?analysisId=ana_…]
+   · GET  /api/analyses?limit=      완료된 분석 목록 (선택용)
+   · POST /api/chats/intro          { analysisId } → { sessionId, greeting }
+   · POST /api/chats/messages       { sessionId, userMessage } → { reply, isCrisis, emergencyContacts, fallback }
+   · 위기(isCrisis) 또는 409(위기로 종료된 세션)면 입력을 잠그고 긴급 연락처를 보여 준다
+   · 메시지는 textContent 로만 넣는다 (모델 출력을 HTML 로 해석하지 않는다)
+   ───────────────────────────────────────────────────────────── */
+const $ = (id) => document.getElementById(id);
+let sessionId = null;
+let busy = false;
+let locked = false;
+
+let toastTimer;
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 3000);
+}
+
+async function api(path, body) {
+  const res = await fetch(path, {
+    method: body ? "POST" : "GET",
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const m = Array.isArray(data.message) ? data.message.join(" · ") : data.message;
+    const err = new Error(m || "요청에 실패했어요 (" + res.status + ")");
+    err.status = res.status;
+    err.data = data;
+    throw err;
+  }
+  return data;
+}
+
+/* ── 시작 화면 ── */
+async function loadAnalyses() {
+  const sel = $("pick");
+  try {
+    const { analyses } = await api("/api/analyses?limit=30");
+    const done = analyses.filter((a) => a.status === "done");
+    sel.innerHTML = '<option value="">직접 입력</option>';
+    for (const a of done) {
+      const o = document.createElement("option");
+      o.value = a.analysisId;
+      const when = new Date(a.createdAt).toLocaleString("ko-KR", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" });
+      o.textContent = a.victimName + " · " + when + " · 구간 " + a.utteranceCount + "개";
+      sel.appendChild(o);
+    }
+    $("pickHint").textContent = done.length ? "" : "완료된 분석이 아직 없어요. 먼저 분석을 실행하세요.";
+    syncPick();
+  } catch (e) {
+    sel.innerHTML = '<option value="">목록을 불러오지 못했어요</option>';
+    $("pickHint").textContent = e.message;
+  }
+}
+function syncPick() {
+  const q = new URLSearchParams(location.search).get("analysisId");
+  if (q && !$("analysisId").value) {
+    $("analysisId").value = q;
+    const opt = [...$("pick").options].find((o) => o.value === q);
+    if (opt) $("pick").value = q;
+  }
+}
+$("pick").addEventListener("change", () => { if ($("pick").value) $("analysisId").value = $("pick").value; });
+
+$("startForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const analysisId = $("analysisId").value.trim();
+  if (!analysisId) return toast("분석 ID를 입력하세요");
+  $("btnStart").disabled = true;
+  $("btnStart").textContent = "인사말을 만드는 중…";
+  try {
+    const data = await api("/api/chats/intro", { analysisId });
+    sessionId = data.sessionId;
+    $("meta").textContent = "분석 " + analysisId + " · 세션 " + data.sessionId;
+    show("chat");
+    addBubble("ai", data.greeting);
+    showRaw(data);
+    $("input").focus();
+  } catch (err) {
+    toast(err.message);
+  } finally {
+    $("btnStart").disabled = false;
+    $("btnStart").textContent = "상담 시작";
+  }
+});
+
+/* ── 화면 전환 ── */
+function show(which) {
+  $("scr-start").classList.toggle("on", which === "start");
+  $("scr-chat").classList.toggle("on", which === "chat");
+  $("composerWrap").hidden = which !== "chat";
+  $("btnReset").hidden = which !== "chat";
+}
+$("btnReset").addEventListener("click", () => {
+  sessionId = null; busy = false; locked = false;
+  $("msgs").textContent = "";
+  $("crisisBox").textContent = "";
+  $("raw").hidden = true;
+  setLocked(false);
+  show("start");
+});
+
+/* ── 대화 ── */
+function addBubble(kind, text) {
+  const b = document.createElement("div");
+  b.className = "bubble " + kind;
+  b.textContent = text;
+  $("msgs").appendChild(b);
+  scrollDown();
+  return b;
+}
+function scrollDown() { window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" }); }
+function showRaw(data) {
+  $("raw").hidden = false;
+  $("rawPre").textContent = JSON.stringify(data, null, 2);
+}
+
+function setLocked(on, note) {
+  locked = on;
+  $("input").disabled = on;
+  $("btnSend").disabled = on;
+  $("composerNote").textContent = on ? (note || "") : "";
+}
+
+function showCrisis(contacts) {
+  const box = $("crisisBox");
+  box.textContent = "";
+  const card = document.createElement("div");
+  card.className = "crisis";
+  card.setAttribute("role", "alert");
+  const h = document.createElement("h2");
+  h.textContent = "지금 바로 도움을 받을 수 있어요";
+  const p = document.createElement("p");
+  p.textContent = "혼자 견디지 않아도 괜찮아요. 아래 번호로 전화하면 전문 상담원이 도와줘요.";
+  card.append(h, p);
+  for (const c of contacts || []) {
+    const a = document.createElement("a");
+    a.href = "tel:" + c.tel.replace(/[^0-9]/g, "");
+    const n = document.createElement("span");
+    n.textContent = c.name;
+    const t = document.createElement("b");
+    t.textContent = c.tel;
+    a.append(n, t);
+    card.appendChild(a);
+  }
+  box.appendChild(card);
+  setLocked(true, "위기 상황으로 상담이 종료됐어요");
+  scrollDown();
+}
+
+/* ── 응답 생성 실패(fallback) 자동 재시도 ──────────────────────
+   서버는 모델 호출이 실패하면 아무것도 저장하지 않고 { fallback: true, reply: 안내 문구 } 를 준다.
+   그러면 임시 안내를 띄우고 같은 요청을 MAX_RETRIES 번 더 보낸다(처음 1번 + 재시도 3번 = 최대 4번).
+   모두 실패하면 마지막에 받은 안내 문구를 평소 응답처럼 출력한다.
+   테스트 편의: ?retryDelay=0 으로 재시도 간격(ms)을 바꿀 수 있다. */
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = Number(new URLSearchParams(location.search).get("retryDelay") ?? 1500);
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+async function sendWithRetry(text, onRetry) {
+  const send = () => api("/api/chats/messages", { sessionId, userMessage: text });
+  let data = await send();
+  for (let n = 1; data.fallback && n <= MAX_RETRIES; n++) {
+    onRetry(n);
+    await sleep(RETRY_DELAY_MS);
+    data = await send();
+  }
+  return data; // 여기서도 fallback 이 true 면 재시도를 다 쓴 것 — reply 가 그 안내 문구다
+}
+
+$("composer").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  if (busy || locked || !sessionId) return;
+  const text = $("input").value.trim();
+  if (!text) return;
+
+  busy = true;
+  $("btnSend").disabled = true;
+  $("input").value = "";
+  autosize();
+  const mine = addBubble("me", text);
+  const typing = addBubble("ai typing", "");
+  typing.innerHTML = "<span>●</span><span>●</span><span>●</span>"; // 고정 문자열이라 안전
+  let notice = null; // 재시도 중에만 보이는 임시 안내
+
+  try {
+    const data = await sendWithRetry(text, (n) => {
+      if (!notice) {
+        notice = document.createElement("div");
+        notice.className = "bubble sys";
+        notice.setAttribute("role", "status");
+        $("msgs").insertBefore(notice, typing);
+      }
+      notice.textContent = "연결 요청이 어려워요. 다시 시도하는 중이에요… (" + n + "/" + MAX_RETRIES + ")";
+      scrollDown();
+    });
+    if (notice) notice.remove();
+    typing.remove();
+    addBubble("ai", data.reply);
+    showRaw(data);
+    if (data.isCrisis) showCrisis(data.emergencyContacts);
+  } catch (err) {
+    if (notice) notice.remove();
+    typing.remove();
+    if (err.status === 409 && err.data && err.data.emergencyContacts) {
+      // 이미 위기로 닫힌 세션 — 보낸 말풍선은 저장되지 않았다
+      mine.remove();
+      addBubble("sys", err.message);
+      showRaw(err.data);
+      showCrisis(err.data.emergencyContacts);
+    } else {
+      // 저장되지 않은 요청이다 — 말풍선을 거두고 입력을 되돌려 다시 보낼 수 있게 한다
+      mine.remove();
+      $("input").value = text;
+      autosize();
+      addBubble("sys", err.message);
+      showRaw(err.data || { message: err.message });
+    }
+  } finally {
+    busy = false;
+    if (!locked) { $("btnSend").disabled = false; $("input").focus(); }
+  }
+});
+
+function autosize() {
+  const t = $("input");
+  t.style.height = "auto";
+  t.style.height = Math.min(t.scrollHeight, 120) + "px";
+}
+$("input").addEventListener("input", autosize);
+$("input").addEventListener("keydown", (e) => {
+  // 한글 조합 중 Enter(isComposing)는 전송하지 않는다
+  if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+    e.preventDefault();
+    $("composer").requestSubmit();
+  }
+});
+
+syncPick();
+loadAnalyses();
+</script>
+</body>
+</html>
