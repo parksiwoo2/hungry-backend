@@ -1,0 +1,532 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>쟁점 중심 판례 검색 결과 시안</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Pretendard, "Noto Sans KR", system-ui, sans-serif;
+        color: #172033;
+        background: #f4f6fa;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      .mock-shell {
+        width: min(980px, calc(100% - 32px));
+        margin: 0 auto;
+      }
+
+      .mock-topbar {
+        border-bottom: 1px solid #dfe4ec;
+        background: rgba(255, 255, 255, 0.97);
+      }
+
+      .mock-topbar .mock-shell {
+        padding: 22px 0;
+      }
+
+      .mock-brand {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 16px;
+      }
+
+      .mock-brand h1 {
+        margin: 0;
+        font-size: 21px;
+        letter-spacing: -0.04em;
+      }
+
+      .mock-label {
+        border-radius: 999px;
+        padding: 6px 10px;
+        color: #526071;
+        background: #eef1f5;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .mock-search {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+      }
+
+      .mock-search input {
+        min-width: 0;
+        min-height: 48px;
+        border: 1px solid #cfd6e1;
+        border-radius: 11px;
+        padding: 0 15px;
+        outline: none;
+        background: #fff;
+      }
+
+      .mock-search input:focus {
+        border-color: #315be8;
+        box-shadow: 0 0 0 3px rgba(49, 91, 232, 0.12);
+      }
+
+      .mock-search button {
+        min-height: 48px;
+        border: 0;
+        border-radius: 11px;
+        padding: 0 22px;
+        color: #fff;
+        background: #315be8;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      main {
+        padding: 30px 0 64px;
+      }
+
+      .mock-results-head {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .mock-results-head h2 {
+        margin: 0 0 5px;
+        font-size: 21px;
+        letter-spacing: -0.035em;
+      }
+
+      .mock-results-head p,
+      .mock-count {
+        margin: 0;
+        color: #6b7484;
+        font-size: 13px;
+      }
+
+      .mock-list {
+        display: grid;
+        gap: 14px;
+      }
+
+      .mock-result {
+        border: 1px solid #e0e5ed;
+        border-radius: 16px;
+        padding: 22px;
+        background: #fff;
+        box-shadow: 0 6px 22px rgba(23, 32, 51, 0.04);
+      }
+
+      .mock-result-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 18px;
+      }
+
+      .mock-result-heading {
+        min-width: 0;
+      }
+
+      .mock-case-number {
+        display: block;
+        margin-bottom: 7px;
+        color: #315be8;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .mock-result h3 {
+        margin: 0;
+        font-size: 18px;
+        line-height: 1.45;
+        letter-spacing: -0.035em;
+        word-break: keep-all;
+      }
+
+      .mock-overall {
+        flex: 0 0 auto;
+        border-radius: 10px;
+        padding: 9px 11px;
+        color: #2347bf;
+        background: #edf2ff;
+        text-align: right;
+      }
+
+      .mock-overall span {
+        display: block;
+        margin-bottom: 2px;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .mock-overall strong {
+        font-size: 18px;
+      }
+
+      .mock-meta {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 7px;
+        margin-top: 11px;
+        color: #7a8495;
+        font-size: 12px;
+      }
+
+      .mock-issue {
+        margin-top: 18px;
+        border-top: 1px solid #e8ecf2;
+        padding-top: 18px;
+      }
+
+      .mock-issue-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .mock-issue-head strong {
+        font-size: 14px;
+      }
+
+      .mock-issue-score {
+        color: #315be8;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .mock-fact {
+        margin: 0;
+        color: #3e4a5c;
+        font-size: 15px;
+        line-height: 1.7;
+      }
+
+      .mock-fact-label {
+        color: #667085;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .mock-context-label {
+        display: block;
+        margin-top: 13px;
+      }
+
+      .mock-crimes {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 7px;
+        margin-top: 13px;
+      }
+
+      .mock-crimes-label {
+        margin-right: 2px;
+        color: #667085;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .mock-crime {
+        border-radius: 7px;
+        padding: 5px 8px;
+        color: #42526a;
+        background: #f0f3f7;
+        font-size: 12px;
+      }
+
+      .mock-judgements {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .mock-judgement {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+        border-radius: 10px;
+        padding: 10px;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .mock-judgement-icon {
+        display: inline-grid;
+        flex: 0 0 22px;
+        width: 22px;
+        height: 22px;
+        place-items: center;
+        border-radius: 50%;
+        color: #fff;
+        font-size: 14px;
+        line-height: 1;
+      }
+
+      .mock-judgement.yes {
+        color: #17613b;
+        background: #eaf8f0;
+      }
+
+      .mock-judgement.yes .mock-judgement-icon {
+        background: #218655;
+      }
+
+      .mock-judgement.no {
+        color: #9d2d35;
+        background: #fff0f1;
+      }
+
+      .mock-judgement.no .mock-judgement-icon {
+        background: #cc4650;
+      }
+
+      .mock-empty {
+        border: 1px dashed #cfd6e1;
+        border-radius: 14px;
+        padding: 36px 20px;
+        color: #667085;
+        background: #fff;
+        text-align: center;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      @media (max-width: 720px) {
+        .mock-shell {
+          width: min(100% - 20px, 980px);
+        }
+
+        .mock-brand,
+        .mock-result-top {
+          align-items: flex-start;
+        }
+
+        .mock-search {
+          grid-template-columns: 1fr;
+        }
+
+        .mock-judgements {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+
+      @media (max-width: 430px) {
+        .mock-brand,
+        .mock-result-top,
+        .mock-results-head {
+          flex-direction: column;
+        }
+
+        .mock-result {
+          padding: 18px;
+        }
+
+        .mock-overall {
+          display: flex;
+          align-items: baseline;
+          gap: 6px;
+          text-align: left;
+        }
+
+        .mock-overall span {
+          margin: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="mock-topbar">
+      <div class="mock-shell">
+        <div class="mock-brand">
+          <h1>판례 검색</h1>
+          <span class="mock-label">UI 시안 · 가짜 데이터</span>
+        </div>
+        <form class="mock-search" id="mockSearchForm">
+          <input
+            id="mockQuery"
+            type="search"
+            value="단체 채팅방에서 피해자를 모욕한 경우"
+            aria-label="판례 검색어"
+          />
+          <button type="submit">검색</button>
+        </form>
+      </div>
+    </header>
+
+    <main class="mock-shell">
+      <div class="mock-results-head">
+        <div>
+          <h2>쟁점 중심 검색 결과</h2>
+          <p>각 판례에서 검색어와 가장 유사한 쟁점 하나를 표시합니다.</p>
+        </div>
+        <span class="mock-count" id="mockCount" aria-live="polite">3건</span>
+      </div>
+
+      <section class="mock-list" id="mockList" aria-label="판례 검색 결과">
+        <article class="mock-result" data-search="단체 채팅방 카카오톡 모욕 모욕죄 공연성 특정성 증거 유죄">
+          <div class="mock-result-top">
+            <div class="mock-result-heading">
+              <span class="mock-case-number">2023도1234</span>
+              <h3>정보통신망이용촉진및정보보호등에관한법률위반(명예훼손)</h3>
+              <div class="mock-meta">
+                <span>대법원</span><span>·</span><span>2024. 3. 14.</span>
+              </div>
+            </div>
+            <div class="mock-overall">
+              <span>종합 유사도</span>
+              <strong>92.4%</strong>
+            </div>
+          </div>
+          <div class="mock-issue">
+            <div class="mock-issue-head">
+              <strong>가장 유사한 쟁점</strong>
+              <span class="mock-issue-score">벡터 유사도 93.2%</span>
+            </div>
+            <span class="mock-fact-label">실제 문제 표현</span>
+            <p class="mock-fact">“너 게이지 맞지?”</p>
+            <span class="mock-fact-label mock-context-label">사실관계</span>
+            <p class="mock-fact">피고인이 피해자와 지인 7명이 참여한 카카오톡 단체 대화방에서 피해자를 직접 지칭하며 해당 표현을 게시하였다.</p>
+            <div class="mock-crimes">
+              <span class="mock-crimes-label">죄명 분류</span>
+              <span class="mock-crime">모욕죄</span>
+              <span class="mock-crime">정보통신망 이용 행위</span>
+            </div>
+            <span class="mock-fact-label mock-context-label">대법원 판단</span>
+            <div class="mock-judgements" aria-label="대법원 인정 결과">
+              <div class="mock-judgement yes"><span class="mock-judgement-icon">✓</span><span>공연성 인정</span></div>
+              <div class="mock-judgement yes"><span class="mock-judgement-icon">✓</span><span>특정성 인정</span></div>
+              <div class="mock-judgement yes"><span class="mock-judgement-icon">✓</span><span>증거 인정</span></div>
+              <div class="mock-judgement yes"><span class="mock-judgement-icon">✓</span><span>유죄 인정</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="mock-result" data-search="온라인 커뮤니티 게시글 허위사실 명예훼손 공연성 특정성 증거 무죄">
+          <div class="mock-result-top">
+            <div class="mock-result-heading">
+              <span class="mock-case-number">2022노817</span>
+              <h3>정보통신망이용촉진및정보보호등에관한법률위반(명예훼손)</h3>
+              <div class="mock-meta">
+                <span>서울중앙지방법원</span><span>·</span><span>2023. 11. 2.</span>
+              </div>
+            </div>
+            <div class="mock-overall">
+              <span>종합 유사도</span>
+              <strong>87.8%</strong>
+            </div>
+          </div>
+          <div class="mock-issue">
+            <div class="mock-issue-head">
+              <strong>가장 유사한 쟁점</strong>
+              <span class="mock-issue-score">벡터 유사도 90.3%</span>
+            </div>
+            <span class="mock-fact-label">실제 문제 표현</span>
+            <p class="mock-fact">“피해자가 회사 자금을 횡령했다.”</p>
+            <span class="mock-fact-label mock-context-label">사실관계</span>
+            <p class="mock-fact">피고인이 회원 120명이 가입한 온라인 커뮤니티 게시판에 해당 글을 반복하여 게시하였다.</p>
+            <div class="mock-crimes">
+              <span class="mock-crimes-label">죄명 분류</span>
+              <span class="mock-crime">허위사실 적시 명예훼손</span>
+              <span class="mock-crime">정보통신망법 위반</span>
+            </div>
+            <span class="mock-fact-label mock-context-label">서울중앙지방법원 판단</span>
+            <div class="mock-judgements" aria-label="서울중앙지방법원 인정 결과">
+              <div class="mock-judgement yes"><span class="mock-judgement-icon">✓</span><span>공연성 인정</span></div>
+              <div class="mock-judgement yes"><span class="mock-judgement-icon">✓</span><span>특정성 인정</span></div>
+              <div class="mock-judgement yes"><span class="mock-judgement-icon">✓</span><span>증거 인정</span></div>
+              <div class="mock-judgement no"><span class="mock-judgement-icon">×</span><span>유죄 불인정</span></div>
+            </div>
+          </div>
+        </article>
+
+        <article class="mock-result" data-search="일대일 메시지 욕설 모욕 공연성 불인정 특정성 증거 유죄 불인정">
+          <div class="mock-result-top">
+            <div class="mock-result-heading">
+              <span class="mock-case-number">2021고단942</span>
+              <h3>모욕</h3>
+              <div class="mock-meta">
+                <span>부산지방법원</span><span>·</span><span>2022. 6. 17.</span>
+              </div>
+            </div>
+            <div class="mock-overall">
+              <span>종합 유사도</span>
+              <strong>81.6%</strong>
+            </div>
+          </div>
+          <div class="mock-issue">
+            <div class="mock-issue-head">
+              <strong>가장 유사한 쟁점</strong>
+              <span class="mock-issue-score">벡터 유사도 86.7%</span>
+            </div>
+            <span class="mock-fact-label">실제 문제 표현</span>
+            <p class="mock-fact">“너 같은 사람은 다들 싫어한다.”</p>
+            <span class="mock-fact-label mock-context-label">사실관계</span>
+            <p class="mock-fact">피고인이 피해자에게 일대일 메신저로 표현을 전송했으나 제3자에게 전달됐다는 사정은 확인되지 않았다.</p>
+            <div class="mock-crimes">
+              <span class="mock-crimes-label">죄명 분류</span>
+              <span class="mock-crime">모욕죄</span>
+            </div>
+            <span class="mock-fact-label mock-context-label">부산지방법원 판단</span>
+            <div class="mock-judgements" aria-label="부산지방법원 인정 결과">
+              <div class="mock-judgement no"><span class="mock-judgement-icon">×</span><span>공연성 불인정</span></div>
+              <div class="mock-judgement yes"><span class="mock-judgement-icon">✓</span><span>특정성 인정</span></div>
+              <div class="mock-judgement yes"><span class="mock-judgement-icon">✓</span><span>증거 인정</span></div>
+              <div class="mock-judgement no"><span class="mock-judgement-icon">×</span><span>유죄 불인정</span></div>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <div class="mock-empty" id="mockEmpty" hidden>입력한 단어와 일치하는 가짜 결과가 없습니다.</div>
+    </main>
+
+    <script>
+      const mockForm = document.querySelector("#mockSearchForm");
+      const mockQuery = document.querySelector("#mockQuery");
+      const mockCards = [...document.querySelectorAll(".mock-result")];
+      const mockCount = document.querySelector("#mockCount");
+      const mockEmpty = document.querySelector("#mockEmpty");
+
+      mockForm.addEventListener("submit", (event) => {
+        event.preventDefault();
+        const terms = mockQuery.value.trim().toLowerCase().split(/\s+/).filter(Boolean);
+        let visibleCount = 0;
+
+        mockCards.forEach((card) => {
+          const searchable = card.textContent.toLowerCase();
+          const visible = terms.length === 0 || terms.some((term) => searchable.includes(term));
+          card.hidden = !visible;
+          if (visible) visibleCount += 1;
+        });
+
+        mockCount.textContent = `${visibleCount}건`;
+        mockEmpty.hidden = visibleCount !== 0;
+      });
+    </script>
+  </body>
+</html>

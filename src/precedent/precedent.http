@@ -1,0 +1,102 @@
+@baseUrl = http://localhost:3000
+
+### Entity 1: PrecedentEntity / precedents
+
+GET {{baseUrl}}/precedent/models/precedents?page=1&limit=5
+Accept: application/json
+
+### Entity 2: PrecedentAnalysisEntity / precedent_analyses
+
+GET {{baseUrl}}/precedent/models/precedent-analyses?page=1&limit=5&precedentId=239161
+Accept: application/json
+
+### Entity 3: PrecedentAnalysisIssueEntity / precedent_analysis_issues
+
+GET {{baseUrl}}/precedent/models/precedent-analysis-issues?page=1&limit=5&precedentId=239161
+Accept: application/json
+
+### Entity 4: PrecedentIssueFindingEntity / precedent_issue_findings
+
+GET {{baseUrl}}/precedent/models/precedent-issue-findings?page=1&limit=5
+Accept: application/json
+
+### Entity 5: PrecedentIssueEmbeddingEntity / precedent_issue_embeddings
+
+GET {{baseUrl}}/precedent/models/precedent-issue-embeddings?page=1&limit=5
+Accept: application/json
+
+### Entity 6: PrecedentSearchDocumentEntity / precedent_search_documents
+
+GET {{baseUrl}}/precedent/models/precedent-search-documents?page=1&limit=5&precedentId=239161
+Accept: application/json
+
+### External API list search
+
+GET {{baseUrl}}/precedent?query=싸이월드%20괴롭히기&search=2&display=10&page=1&sort=ddes
+Accept: application/json
+
+###
+
+GET {{baseUrl}}/precedent/69048
+Accept: application/json
+
+###
+
+GET {{baseUrl}}/precedent/stored?page=1&limit=20
+Accept: application/json
+
+###
+
+GET {{baseUrl}}/precedent/stored/69048
+Accept: application/json
+
+###
+
+GET {{baseUrl}}/precedent/stored/categories
+Accept: application/json
+
+###
+
+POST {{baseUrl}}/precedent/match
+Content-Type: application/json
+
+{
+  "analysisTargets": [
+    {
+      "targetText": "야 너 게이지 맞지?",
+      "legalContext": {
+        "isGroupChat": true,
+        "audienceCount": 8,
+        "victimIdentifiable": true
+      }
+    }
+  ]
+}
+
+###
+
+POST {{baseUrl}}/precedent/search
+Content-Type: application/json
+
+{
+  "query": "단톡방에서 친구를 모욕한 경우 공연성과 증거 인정 기준",
+  "mode": "hybrid",
+  "limit": 10,
+  "offset": 0,
+  "filters": {}
+}
+
+###
+
+POST {{baseUrl}}/precedent/search
+Content-Type: application/json
+
+{
+  "query": "2007노120",
+  "mode": "summary",
+  "limit": 5,
+  "offset": 0,
+  "filters": {
+    "caseNumber": "2007노120"
+  }
+}

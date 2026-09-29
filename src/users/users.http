@@ -1,0 +1,37 @@
+@baseUrl = http://localhost:3000
+
+### 회원가입 (자동 로그인하지 않음)
+POST {{baseUrl}}/auth/signup
+Content-Type: application/json
+
+{
+  "email": "sieu.park@gmail.com",
+  "nickName": "몽이"
+}
+
+### 개발용 이메일 로그인 (응답 Set-Cookie를 클라이언트 쿠키 저장소에 보관)
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "sieu.park@gmail.com"
+}
+
+### 내 정보 조회 (로그인 응답의 쿠키 자동 전송 필요)
+GET {{baseUrl}}/users/me
+
+### 내 정보 부분 수정 (email, nickName, maskingIcon, secretPassword 중 필요한 필드만)
+PATCH {{baseUrl}}/users/me
+Content-Type: application/json
+
+{
+  "nickName": "몽이",
+  "maskingIcon": "NOTE",
+  "secretPassword": "1234@12"
+}
+
+### 로그아웃 (현재 세션만 종료)
+POST {{baseUrl}}/auth/logout
+
+### 회원탈퇴 (다시 로그인 후 실행, 사용자와 모든 세션 영구 삭제)
+DELETE {{baseUrl}}/users/me
