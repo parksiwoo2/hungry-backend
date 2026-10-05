@@ -18,5 +18,7 @@ import { SafeguardInfraModule } from './safeguard-infra.module';
     SessionsService,
     AnalysesService,
   ],
+  // 다른 모듈(행동 제시 카드 등)이 분석 결과를 읽는 창구
+  exports: [AnalysesService],
 })
 export class SafeguardModule {}

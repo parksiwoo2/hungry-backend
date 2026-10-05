@@ -7,7 +7,7 @@
  * 그 모듈만 테스트용으로 갈아 끼우면 DB·외부 API 없이 라우트·검증·저장 흐름을 본다.
  */
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, Module } from '@nestjs/common';
+import { Injectable, INestApplication, Module } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { buildValidationPipe } from './../src/validation-pipe';
@@ -20,6 +20,7 @@ import {
 import { SAFEGUARD_STORE } from './../src/safeguard/storage/safeguard-store';
 import { SqliteSafeguardStore } from './../src/safeguard/storage/sqlite-safeguard-store';
 import { SafeguardAnalysisService } from './../src/safeguard/safeguard-analysis.service';
+import { AnalysesService } from './../src/safeguard/analyses.service';
 import { ReportPdfService } from './../src/safeguard/report-pdf.service';
 
 const RAW = [
@@ -70,8 +71,17 @@ describe('Safeguard API (e2e)', () => {
     })
     class TestInfraModule {}
 
+    // 다른 모듈(행동 제시 카드 등)이 분석 결과를 읽을 수 있어야 한다 —
+    // SafeguardModule 이 AnalysesService 를 export 하지 않으면 여기서 컴파일이 실패한다
+    @Injectable()
+    class OutsideConsumer {
+      constructor(readonly analyses: AnalysesService) {}
+    }
+    @Module({ imports: [SafeguardModule], providers: [OutsideConsumer] })
+    class OutsideModule {}
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [SafeguardModule],
+      imports: [SafeguardModule, OutsideModule],
     })
       .overrideModule(SafeguardInfraModule)
       .useModule(TestInfraModule)
@@ -211,6 +221,16 @@ describe('Safeguard API (e2e)', () => {
         victimName: '윤아',
         patterns: ['셔틀'],
         precedents: { '2003도709': '공갈' }, // 미사용 후보(2006도546)는 빠진다
+        // 갈취강요·협박 + 즉시조치 → 코드가 고른 행동 제시 카드 (action-rules.ts)
+        actionIds: [
+          'CARD_EMERGENCY_REPORT',
+          'CARD_NO_RETALIATION',
+          'CARD_BACKUP_EVIDENCE',
+          'CARD_NO_LEAVE_CHATROOM',
+          'CARD_NO_MONEY_TRANSFER',
+          'CARD_NO_MEETING',
+          'CARD_INFORM_ADULT',
+        ],
         summary: {
           total: 1,
           urgentCount: 1,

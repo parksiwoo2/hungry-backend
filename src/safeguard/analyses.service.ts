@@ -29,6 +29,7 @@ import {
   type UtteranceRecord,
 } from './storage/safeguard-store';
 import type { CreateAnalysisDto } from './dto/analysis.dto';
+import { selectActionIds, type ActionId } from './action-rules';
 
 export type StageListener = (
   stage: string,
@@ -71,6 +72,8 @@ export interface AnalysisResponse {
   patterns: string[];
   summary: AnalysisSummaryResponse | null;
   precedents: Record<string, string>;
+  /** 행동 제시 카드 ID — 저장값이 아니라 조회할 때 규칙으로 고른다 (action-rules.ts) */
+  actionIds: ActionId[];
 }
 
 export interface AnalysisListItemResponse {
@@ -305,6 +308,12 @@ export class AnalysesService {
       patterns: a.patterns,
       summary: a.summary ? AnalysesService.toSummary(a.summary) : null,
       precedents: a.precedents,
+      actionIds: selectActionIds({
+        context: a.context,
+        utterances: a.utterances,
+        patterns: a.patterns,
+        isRepeated: a.summary?.isRepeated ?? false,
+      }),
     };
   }
 
