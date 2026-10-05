@@ -1,8 +1,8 @@
 /**
  * SafeguardStore 의 SQLite 구현 (better-sqlite3, 동기 API).
  *
- * 팀 DB가 정해지기 전까지의 저장소. 파일 하나(data/safeguard.sqlite)로 동작하고
- * 테스트는 ':memory:' 로 연다. 스키마는 부팅 때 CREATE IF NOT EXISTS 로 만든다.
+ * 테스트용 저장소다 — 운영은 Postgres(postgres-safeguard-store.ts)를 쓴다. e2e 와 계약 테스트가
+ * ':memory:' 로 열어 DB 없이 돈다. 스키마는 생성자에서 CREATE IF NOT EXISTS 로 만든다.
  *
  * 배열·객체 필드는 JSON 문자열 컬럼(*_json)에 넣는다 — 조회 조건으로 쓰지 않으므로
  * 정규화하지 않았다. 세션↔분석은 조인 테이블(analysis_sessions)로 잇고,

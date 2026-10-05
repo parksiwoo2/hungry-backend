@@ -4,13 +4,13 @@
  * 2패스 구조:
  *   1차 선별(AI)   유해 "구간"(같은 행위를 이루는 메시지 묶음) 수집 + 특정성 + 사실 요약. 성립 판단 안 함.
  *                  애매하면 포함 — 여기서 빠지면 복구 불가, 잘못 들어간 건 2차가 거름.
- *   판례 매칭      팀원 모듈(벡터 DB) — targetText와 가장 가까운 판례 문구 3개.
- *                  준비 전까지 MockPrecedentProvider (precedent-provider.ts).
+ *   판례 매칭      팀 판례 검색 모듈(벡터 DB) — targetText와 가장 가까운 판례 3개.
+ *                  PRECEDENT_PROVIDER 로 주입 (운영 구현: vector-precedent-provider.ts).
  *   2차 판단(AI)   구간 원문 + 판례 + 요약으로 유형·정도 확정. 무관 판례는 버리게 지시.
  *   집계·문서      코드. 조문·형량은 law-articles.json(법령 API 수집)에서.
  *
  * 원칙:  의미 판단은 AI가, 숫자 집계·법조항은 코드가.
- * 근거:  판례-풀.json(사건번호·요지 전부 판례 API 원문) + safeguard-law-reference.md
+ * 근거:  판례 DB(사건번호·요지 전부 판례 API 원문) + safeguard-law-reference.md
  *
  * deps: npm i @anthropic-ai/sdk zod
  */

@@ -5,6 +5,7 @@ import { PrecedentModule } from './precedent/precedent.module';
 import { EnsurePrecedentSchema20260816000000 } from './migrations/20260816000000-ensure-precedent-schema';
 import { CreatePrecedentAnalyses20260816010000 } from './migrations/20260816010000-create-precedent-analyses';
 import { CreateUsers20260922000000 } from './migrations/20260922000000-create-users';
+import { CreateSafeguardTables20261005000000 } from './migrations/20261005000000-create-safeguard-tables';
 import { UsersModule } from './users/users.module';
 import { SafeguardModule } from './safeguard/safeguard.module';
 
@@ -26,6 +27,7 @@ import { SafeguardModule } from './safeguard/safeguard.module';
           EnsurePrecedentSchema20260816000000,
           CreatePrecedentAnalyses20260816010000,
           CreateUsers20260922000000,
+          CreateSafeguardTables20261005000000,
         ],
         migrationsRun: true,
       }),

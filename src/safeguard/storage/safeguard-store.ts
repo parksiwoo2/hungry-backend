@@ -2,9 +2,9 @@
  * 저장소 계약 — 세션(업로드 자료) · 분석 · 의심 구간(utterance).
  *
  * 팀 데이터 모델(analysis > session > utterance)을 그대로 따른다.
- * 지금 구현은 SQLite(sqlite-safeguard-store.ts)이고, 팀 DB가 정해지면
- * 이 인터페이스를 구현한 클래스로 SAFEGUARD_STORE 프로바이더만 바꾸면 된다.
- * 그래서 전부 async다 — SQLite는 동기지만 계약은 비동기 DB 기준으로 맞췄다.
+ * 운영 구현은 Postgres(postgres-safeguard-store.ts), 테스트 구현은 SQLite(sqlite-safeguard-store.ts).
+ * 어느 것을 쓸지는 SAFEGUARD_STORE 프로바이더(safeguard-infra.module.ts)가 정한다.
+ * 두 구현은 같은 계약 테스트(safeguard-store.spec.ts)를 통과해야 한다.
  */
 import { randomUUID } from 'crypto';
 import type {
