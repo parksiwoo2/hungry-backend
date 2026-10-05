@@ -1,0 +1,783 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>쟁점 중심 판례 상세 시안</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Pretendard, "Noto Sans KR", system-ui, sans-serif;
+        color: #172033;
+        background: #f4f6fa;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+      }
+
+      button,
+      summary {
+        font: inherit;
+      }
+
+      .detail-shell {
+        width: min(980px, calc(100% - 32px));
+        margin: 0 auto;
+      }
+
+      .detail-topbar {
+        border-bottom: 1px solid #dfe4ec;
+        background: rgba(255, 255, 255, 0.97);
+      }
+
+      .detail-topbar .detail-shell {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 17px 0;
+      }
+
+      .back-button {
+        border: 1px solid #d5dbe5;
+        border-radius: 9px;
+        padding: 9px 12px;
+        color: #334155;
+        background: #fff;
+        font-weight: 700;
+        cursor: pointer;
+      }
+
+      .mock-label {
+        border-radius: 999px;
+        padding: 6px 10px;
+        color: #526071;
+        background: #eef1f5;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      main {
+        padding: 28px 0 64px;
+      }
+
+      .case-header,
+      .issue-card,
+      .original-panel {
+        border: 1px solid #e0e5ed;
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: 0 6px 22px rgba(23, 32, 51, 0.04);
+      }
+
+      .case-header {
+        padding: 25px;
+      }
+
+      .case-header-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20px;
+      }
+
+      .case-number {
+        display: block;
+        margin-bottom: 8px;
+        color: #315be8;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      h1 {
+        margin: 0;
+        font-size: 26px;
+        line-height: 1.4;
+        letter-spacing: -0.045em;
+        word-break: keep-all;
+      }
+
+      .overall-score {
+        flex: 0 0 auto;
+        border-radius: 11px;
+        padding: 10px 12px;
+        color: #2347bf;
+        background: #edf2ff;
+        text-align: right;
+      }
+
+      .overall-score span {
+        display: block;
+        margin-bottom: 2px;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .overall-score strong {
+        font-size: 19px;
+      }
+
+      .case-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+        margin-top: 13px;
+        color: #707b8c;
+        font-size: 13px;
+      }
+
+      .case-note {
+        margin: 18px 0 0;
+        border-top: 1px solid #e8ecf2;
+        padding-top: 17px;
+        color: #485568;
+        line-height: 1.7;
+      }
+
+      .issues-section {
+        margin-top: 28px;
+      }
+
+      .section-heading {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 13px;
+      }
+
+      .section-heading h2 {
+        margin: 0 0 5px;
+        font-size: 21px;
+        letter-spacing: -0.035em;
+      }
+
+      .section-heading p,
+      .section-heading span {
+        margin: 0;
+        color: #6b7484;
+        font-size: 13px;
+      }
+
+      .issues-list {
+        display: grid;
+        gap: 14px;
+      }
+
+      .issue-card {
+        overflow: hidden;
+      }
+
+      .issue-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 20px 22px;
+        background: #fff;
+      }
+
+      .issue-rank {
+        display: flex;
+        align-items: center;
+        gap: 11px;
+        min-width: 0;
+      }
+
+      .rank-number {
+        display: inline-grid;
+        flex: 0 0 30px;
+        width: 30px;
+        height: 30px;
+        place-items: center;
+        border-radius: 50%;
+        color: #fff;
+        background: #315be8;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .issue-rank strong {
+        display: block;
+        margin-bottom: 3px;
+        font-size: 16px;
+      }
+
+      .issue-rank small {
+        color: #778193;
+        font-size: 12px;
+      }
+
+      .similarity {
+        flex: 0 0 auto;
+        color: #315be8;
+        text-align: right;
+      }
+
+      .similarity span {
+        display: block;
+        margin-bottom: 2px;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .similarity strong {
+        font-size: 18px;
+      }
+
+      .similarity-track {
+        width: 92px;
+        height: 4px;
+        margin-top: 6px;
+        overflow: hidden;
+        border-radius: 999px;
+        background: #dfe5f2;
+      }
+
+      .similarity-fill {
+        height: 100%;
+        border-radius: inherit;
+        background: #315be8;
+      }
+
+      .issue-body {
+        border-top: 1px solid #e8ecf2;
+        padding: 21px 22px 23px;
+      }
+
+      .field-block + .field-block {
+        margin-top: 18px;
+      }
+
+      .field-label {
+        display: block;
+        margin-bottom: 7px;
+        color: #667085;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .field-text {
+        margin: 0;
+        color: #3e4a5c;
+        line-height: 1.72;
+        white-space: pre-wrap;
+      }
+
+      .evidence-text {
+        margin: 0;
+        border-left: 3px solid #8ba2f1;
+        padding: 8px 0 8px 14px;
+        color: #27364d;
+        font-size: 16px;
+        font-weight: 700;
+        line-height: 1.65;
+      }
+
+      .context-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .context-item {
+        border-radius: 10px;
+        padding: 11px 12px;
+        background: #f5f7fa;
+      }
+
+      .context-item span {
+        display: block;
+        margin-bottom: 4px;
+        color: #6b7484;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .context-item strong {
+        font-size: 14px;
+      }
+
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 7px;
+      }
+
+      .tag {
+        border-radius: 7px;
+        padding: 6px 9px;
+        color: #42526a;
+        background: #eef2f6;
+        font-size: 12px;
+      }
+
+      .tag.crime {
+        color: #2947a8;
+        background: #edf2ff;
+        font-weight: 700;
+      }
+
+      .judgements {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .judgement {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 10px;
+        padding: 10px;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .judgement-icon {
+        display: inline-grid;
+        flex: 0 0 22px;
+        width: 22px;
+        height: 22px;
+        place-items: center;
+        border-radius: 50%;
+        color: #fff;
+        font-size: 14px;
+      }
+
+      .judgement.yes {
+        color: #17613b;
+        background: #eaf8f0;
+      }
+
+      .judgement.yes .judgement-icon {
+        background: #218655;
+      }
+
+      .judgement.no {
+        color: #9d2d35;
+        background: #fff0f1;
+      }
+
+      .judgement.no .judgement-icon {
+        background: #cc4650;
+      }
+
+      .findings {
+        display: grid;
+        gap: 10px;
+      }
+
+      .finding {
+        border-left: 3px solid #bdc9ef;
+        padding: 4px 0 4px 14px;
+      }
+
+      .finding-head {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 8px;
+      }
+
+      .finding-head strong {
+        font-size: 14px;
+      }
+
+      .court-level {
+        border-radius: 999px;
+        padding: 4px 7px;
+        color: #566175;
+        background: #eef1f5;
+        font-size: 10px;
+        font-weight: 800;
+      }
+
+      .finding dl {
+        display: grid;
+        grid-template-columns: 90px minmax(0, 1fr);
+        gap: 8px 12px;
+        margin: 0;
+      }
+
+      .finding dt {
+        color: #6b7484;
+        font-size: 12px;
+        font-weight: 800;
+      }
+
+      .finding dd {
+        margin: 0;
+        color: #465367;
+        line-height: 1.65;
+      }
+
+      .rules {
+        margin: 0;
+        padding-left: 18px;
+      }
+
+      .rules li + li {
+        margin-top: 5px;
+      }
+
+      .original-panel {
+        margin-top: 28px;
+        overflow: hidden;
+      }
+
+      .original-panel summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        padding: 20px 22px;
+        cursor: pointer;
+        font-weight: 800;
+        list-style: none;
+      }
+
+      .original-panel summary::-webkit-details-marker {
+        display: none;
+      }
+
+      .original-panel summary span {
+        color: #315be8;
+        font-size: 13px;
+      }
+
+      .original-content {
+        max-height: 520px;
+        overflow: auto;
+        margin: 0;
+        border-top: 1px solid #e8ecf2;
+        padding: 22px;
+        color: #465367;
+        background: #f8fafc;
+        font-family: inherit;
+        font-size: 13px;
+        line-height: 1.75;
+        white-space: pre-wrap;
+      }
+
+      @media (max-width: 720px) {
+        .detail-shell {
+          width: min(100% - 20px, 980px);
+        }
+
+        .context-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .judgements {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .finding dl {
+          grid-template-columns: 1fr;
+          gap: 4px;
+        }
+      }
+
+      @media (max-width: 480px) {
+        .case-header,
+        .issue-body {
+          padding: 18px;
+        }
+
+        .case-header-top,
+        .section-heading,
+        .issue-summary {
+          align-items: flex-start;
+          flex-direction: column;
+        }
+
+        .issue-summary {
+          padding: 18px;
+        }
+
+        .overall-score {
+          display: flex;
+          align-items: baseline;
+          gap: 6px;
+          text-align: left;
+        }
+
+        .overall-score span {
+          margin: 0;
+        }
+
+        .similarity {
+          width: 100%;
+          text-align: left;
+        }
+
+        .similarity-track {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="detail-topbar">
+      <div class="detail-shell">
+        <button class="back-button" type="button" onclick="history.back()">← 검색 결과로</button>
+        <span class="mock-label">상세 UI 시안 · 가짜 데이터</span>
+      </div>
+    </header>
+
+    <main class="detail-shell">
+      <article class="case-header">
+        <div class="case-header-top">
+          <div>
+            <span class="case-number">2023도1234</span>
+            <h1>정보통신망이용촉진및정보보호등에관한법률위반(명예훼손)</h1>
+            <div class="case-meta">
+              <span>대법원</span><span>·</span><span>2024. 3. 14. 선고</span><span>·</span><span>형사</span>
+            </div>
+          </div>
+          <div class="overall-score">
+            <span>종합 유사도</span>
+            <strong>92.4%</strong>
+          </div>
+        </div>
+        <p class="case-note">검색어와 연결된 쟁점 3개를 계산된 검색 점수가 높은 순서대로 표시합니다.</p>
+      </article>
+
+      <section class="issues-section">
+        <div class="section-heading">
+          <div>
+            <h2>검색어와 관련된 쟁점</h2>
+            <p>문제 표현과 사실관계, 법적 맥락 및 법원의 판단을 쟁점별로 확인할 수 있습니다.</p>
+          </div>
+          <span>총 3개 · 유사도순</span>
+        </div>
+
+        <div class="issues-list">
+          <article class="issue-card">
+            <div class="issue-summary">
+              <div class="issue-rank">
+                <div>
+                  <strong>쟁점 1</strong>
+                  <small>group_chat_message</small>
+                </div>
+              </div>
+              <div class="similarity">
+                <span>벡터 유사도</span>
+                <strong>93.2%</strong>
+                <div class="similarity-track"><div class="similarity-fill" style="width: 93.2%"></div></div>
+              </div>
+            </div>
+            <div class="issue-body">
+              <div class="field-block">
+                <span class="field-label">쟁점 요약</span>
+                <p class="field-text">카카오톡 단체 대화방에서 피해자를 지칭한 모욕적 표현이 공연성과 특정성을 충족하고, 대화 캡처가 유죄 인정의 증거로 사용될 수 있는지가 문제 된 사안</p>
+              </div>
+              <div class="field-block">
+                <span class="field-label">실제 문제 표현</span>
+                <blockquote class="evidence-text">“야 너 게이지 맞지?”</blockquote>
+              </div>
+              <div class="field-block">
+                <span class="field-label">사실관계</span>
+                <p class="field-text">피고인이 피해자와 지인 7명이 참여한 카카오톡 단체 대화방에서 피해자를 직접 지칭하며 해당 표현을 게시했다. 대화 참여자들은 피해자가 누구인지 알고 있었고, 피해자가 제출한 대화 화면 캡처와 참여자 진술이 증거로 조사되었다.</p>
+              </div>
+              <div class="field-block">
+                <span class="field-label">법적 맥락</span>
+                <div class="context-grid">
+                  <div class="context-item"><span>단체 대화방</span><strong>예</strong></div>
+                  <div class="context-item"><span>참여·수신 인원</span><strong>8명</strong></div>
+                  <div class="context-item"><span>피해자 식별 가능</span><strong>예</strong></div>
+                </div>
+              </div>
+              <div class="field-block">
+                <span class="field-label">죄명 분류</span>
+                <div class="tags"><span class="tag crime">모욕죄</span><span class="tag crime">정보통신망 이용 행위</span></div>
+              </div>
+              <div class="field-block">
+                <span class="field-label">핵심 키워드</span>
+                <div class="tags"><span class="tag">카카오톡</span><span class="tag">단체 대화방</span><span class="tag">공연성</span><span class="tag">특정성</span><span class="tag">대화 캡처</span></div>
+              </div>
+              <div class="field-block">
+                <span class="field-label">대법원 판단값</span>
+                <div class="judgements">
+                  <div class="judgement yes"><span class="judgement-icon">✓</span><span>공연성 인정</span></div>
+                  <div class="judgement yes"><span class="judgement-icon">✓</span><span>특정성 인정</span></div>
+                  <div class="judgement yes"><span class="judgement-icon">✓</span><span>증거 인정</span></div>
+                  <div class="judgement yes"><span class="judgement-icon">✓</span><span>유죄 인정</span></div>
+                </div>
+              </div>
+              <div class="field-block">
+                <span class="field-label">심급별 법원 판단</span>
+                <div class="findings">
+                  <div class="finding">
+                    <div class="finding-head"><strong>서울중앙지방법원</strong><span class="court-level">1심</span></div>
+                    <dl>
+                      <dt>구체적 판단</dt><dd>참여자들이 피해자를 알고 있었고 발언이 여러 사람에게 동시에 전달되었으므로 공연성과 특정성이 인정된다.</dd>
+                      <dt>증거 판단</dt><dd>원본 휴대전화와 대조된 대화 화면 캡처 및 참여자 진술의 신빙성을 인정하였다.</dd>
+                      <dt>일반화 법리</dt><dd><ul class="rules"><li>제한된 단체 대화방이라도 다수인이 인식할 수 있다면 공연성이 인정될 수 있다.</li><li>실명이 없어도 대화 맥락상 대상자를 알 수 있다면 특정성이 인정될 수 있다.</li></ul></dd>
+                    </dl>
+                  </div>
+                  <div class="finding">
+                    <div class="finding-head"><strong>대법원</strong><span class="court-level">상고심</span></div>
+                    <dl>
+                      <dt>구체적 판단</dt><dd>원심의 공연성·특정성 및 증거 판단에 법리 오해가 없다고 보아 유죄 판단을 유지하였다.</dd>
+                      <dt>증거 판단</dt><dd>전자정보의 취득 경위와 원본 동일성이 확인되었으므로 증거가치를 인정하였다.</dd>
+                    </dl>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="issue-card">
+            <div class="issue-summary">
+              <div class="issue-rank">
+                <div>
+                  <strong>쟁점 2</strong>
+                  <small>group_chat_message</small>
+                </div>
+              </div>
+              <div class="similarity">
+                <span>벡터 유사도</span>
+                <strong>87.5%</strong>
+                <div class="similarity-track"><div class="similarity-fill" style="width: 87.5%"></div></div>
+              </div>
+            </div>
+            <div class="issue-body">
+              <div class="field-block">
+                <span class="field-label">쟁점 요약</span>
+                <p class="field-text">최초 대화방의 메시지를 캡처해 별도 단체방에 다시 게시한 행위가 피해자의 사회적 평가를 저하하는 전파 행위인지 문제 된 사안</p>
+              </div>
+              <div class="field-block">
+                <span class="field-label">실제 문제 표현</span>
+                <blockquote class="evidence-text">“얘가 아까 이런 말을 했다”</blockquote>
+              </div>
+              <div class="field-block">
+                <span class="field-label">사실관계</span>
+                <p class="field-text">피고인은 최초 단체방의 대화 캡처를 피해자의 학교 지인들이 포함된 23인 대화방에 게시하였다. 캡처에는 피해자의 프로필 사진과 이름이 표시되어 있었다.</p>
+              </div>
+              <div class="field-block">
+                <span class="field-label">법적 맥락</span>
+                <div class="context-grid">
+                  <div class="context-item"><span>단체 대화방</span><strong>예</strong></div>
+                  <div class="context-item"><span>참여·수신 인원</span><strong>23명</strong></div>
+                  <div class="context-item"><span>피해자 식별 가능</span><strong>예</strong></div>
+                </div>
+              </div>
+              <div class="field-block">
+                <span class="field-label">죄명 분류 및 키워드</span>
+                <div class="tags"><span class="tag crime">명예훼손죄</span><span class="tag">대화 유포</span><span class="tag">프로필 사진</span><span class="tag">전파 가능성</span></div>
+              </div>
+              <div class="field-block">
+                <span class="field-label">대법원 판단값</span>
+                <div class="judgements">
+                  <div class="judgement yes"><span class="judgement-icon">✓</span><span>공연성 인정</span></div>
+                  <div class="judgement yes"><span class="judgement-icon">✓</span><span>특정성 인정</span></div>
+                  <div class="judgement yes"><span class="judgement-icon">✓</span><span>증거 인정</span></div>
+                  <div class="judgement no"><span class="judgement-icon">×</span><span>유죄 불인정</span></div>
+                </div>
+              </div>
+              <div class="field-block">
+                <span class="field-label">법원 판단</span>
+                <div class="finding">
+                  <div class="finding-head"><strong>대법원</strong><span class="court-level">상고심</span></div>
+                  <dl>
+                    <dt>구체적 판단</dt><dd>공연성과 특정성은 인정되지만 캡처에 담긴 내용이 허위라는 점과 비방 목적이 충분히 증명되지 않았다.</dd>
+                    <dt>증거 판단</dt><dd>캡처의 게시 사실은 인정했으나 허위성 및 고의 입증에는 부족하다고 판단하였다.</dd>
+                    <dt>일반화 법리</dt><dd>표현의 전파 사실만으로 허위사실 적시의 고의까지 당연히 인정되는 것은 아니다.</dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </article>
+
+          <article class="issue-card">
+            <div class="issue-summary">
+              <div class="issue-rank">
+                <div>
+                  <strong>쟁점 3</strong>
+                  <small>direct_message</small>
+                </div>
+              </div>
+              <div class="similarity">
+                <span>벡터 유사도</span>
+                <strong>73.2%</strong>
+                <div class="similarity-track"><div class="similarity-fill" style="width: 73.2%"></div></div>
+              </div>
+            </div>
+            <div class="issue-body">
+              <div class="field-block">
+                <span class="field-label">쟁점 요약</span>
+                <p class="field-text">피해자에게만 전송된 모욕적 개인 메시지가 불특정 또는 다수인에게 전파될 가능성이 있었는지 문제 된 사안</p>
+              </div>
+              <div class="field-block">
+                <span class="field-label">실제 문제 표현</span>
+                <blockquote class="evidence-text">“너 같은 사람은 다들 싫어한다”</blockquote>
+              </div>
+              <div class="field-block">
+                <span class="field-label">사실관계</span>
+                <p class="field-text">단체방 대화 이후 피고인이 피해자에게 일대일 메시지를 추가로 전송하였다. 피해자 이외의 사람이 메시지를 확인하거나 전달받았다는 자료는 없었다.</p>
+              </div>
+              <div class="field-block">
+                <span class="field-label">법적 맥락</span>
+                <div class="context-grid">
+                  <div class="context-item"><span>단체 대화방</span><strong>아니요</strong></div>
+                  <div class="context-item"><span>참여·수신 인원</span><strong>1명</strong></div>
+                  <div class="context-item"><span>피해자 식별 가능</span><strong>예</strong></div>
+                </div>
+              </div>
+              <div class="field-block">
+                <span class="field-label">죄명 분류 및 키워드</span>
+                <div class="tags"><span class="tag crime">모욕죄</span><span class="tag">일대일 메시지</span><span class="tag">공연성 부정</span></div>
+              </div>
+              <div class="field-block">
+                <span class="field-label">서울중앙지방법원 판단값</span>
+                <div class="judgements">
+                  <div class="judgement no"><span class="judgement-icon">×</span><span>공연성 불인정</span></div>
+                  <div class="judgement yes"><span class="judgement-icon">✓</span><span>특정성 인정</span></div>
+                  <div class="judgement yes"><span class="judgement-icon">✓</span><span>증거 인정</span></div>
+                  <div class="judgement no"><span class="judgement-icon">×</span><span>유죄 불인정</span></div>
+                </div>
+              </div>
+              <div class="field-block">
+                <span class="field-label">법원 판단</span>
+                <div class="finding">
+                  <div class="finding-head"><strong>서울중앙지방법원</strong><span class="court-level">1심</span></div>
+                  <dl>
+                    <dt>구체적 판단</dt><dd>메시지가 피해자 한 명에게만 전달되었고 제3자에게 전파될 가능성이 인정되지 않아 공연성이 부족하다.</dd>
+                    <dt>증거 판단</dt><dd>메시지 자체와 피고인의 전송 사실은 인정되지만 모욕죄 성립에는 부족하다.</dd>
+                    <dt>일반화 법리</dt><dd>특정인에게만 전달된 표현은 제3자에게 전파될 가능성이 구체적으로 인정되지 않는 한 공연성이 인정되기 어렵다.</dd>
+                  </dl>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <details class="original-panel">
+        <summary>판례 원문 보기 <span>클릭하여 펼치기</span></summary>
+        <pre class="original-content">【피 고 인】 피고인
+【검 사】 검사
+【주 문】 상고를 기각한다.
+
+【이 유】
+이 사건 판례 원문은 상세 화면 구성을 확인하기 위한 가짜 데이터입니다.
+
+1. 공소사실의 요지
+피고인은 카카오톡 단체 대화방에서 피해자를 지칭하며 모욕적인 표현을 게시하였다.
+
+2. 법원의 판단
+단체 대화방의 참여 인원, 참여자와 피해자의 관계, 표현이 전달된 경위 등을 종합하면 공연성과 특정성을 인정할 수 있다.
+
+실제 화면에서는 여기에 precedents.fullContent 전체가 표시됩니다.</pre>
+      </details>
+    </main>
+  </body>
+</html>

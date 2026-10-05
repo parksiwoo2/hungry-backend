@@ -1,0 +1,54 @@
+name: hungry
+
+services:
+  db:
+    image: pgvector/pgvector:0.8.6-pg18
+    container_name: hungry-pgvector
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      POSTGRES_DB: ${DB_NAME:-hungry}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - hungry_pgvector_data:/var/lib/postgresql
+      - ./docker/postgres/init/01-pgvector.sql:/docker-entrypoint-initdb.d/01-pgvector.sql:ro
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    shm_size: 1gb
+
+  restore:
+    image: pgvector/pgvector:0.8.6-pg18
+    profiles:
+      - restore
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGPORT: 5432
+      PGUSER: ${DB_USERNAME:-postgres}
+      PGPASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      PGDATABASE: ${DB_NAME:-hungry}
+    volumes:
+      - ./dump-hungry.sql:/backup/dump-hungry.sql:ro
+    entrypoint:
+      - /bin/sh
+      - -c
+    command:
+      - |
+        set -e
+        psql --dbname="$${PGDATABASE}" --command='DROP EXTENSION IF EXISTS vector;'
+        pg_restore --exit-on-error --clean --if-exists --no-owner --no-privileges --dbname="$${PGDATABASE}" /backup/dump-hungry.sql
+        psql --dbname="$${PGDATABASE}" --command='CREATE EXTENSION IF NOT EXISTS vector;'
+    restart: "no"
+
+volumes:
+  hungry_pgvector_data:

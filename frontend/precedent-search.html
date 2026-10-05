@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>판례 하이브리드 검색</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Pretendard, "Noto Sans KR", system-ui, sans-serif;
+        color: #172033;
+        background: #f4f6fa;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-width: 320px;
+      }
+
+      button,
+      input {
+        font: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      .shell {
+        width: min(920px, calc(100% - 32px));
+        margin: 0 auto;
+      }
+
+      .topbar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        border-bottom: 1px solid #dfe4ec;
+        background: rgba(255, 255, 255, 0.96);
+        backdrop-filter: blur(12px);
+      }
+
+      .topbar .shell {
+        padding: 18px 0;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .brand h1 {
+        margin: 0;
+        font-size: 20px;
+        letter-spacing: -0.03em;
+      }
+
+      .api-state {
+        color: #6b7280;
+        font-size: 12px;
+      }
+
+      .search-form {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 8px;
+      }
+
+      .field {
+        width: 100%;
+        min-height: 46px;
+        border: 1px solid #cfd6e1;
+        border-radius: 10px;
+        padding: 0 14px;
+        outline: none;
+        background: #fff;
+      }
+
+      .field:focus {
+        border-color: #315be8;
+        box-shadow: 0 0 0 3px rgba(49, 91, 232, 0.12);
+      }
+
+      .primary-button {
+        min-height: 46px;
+        border: 0;
+        border-radius: 10px;
+        padding: 0 20px;
+        color: #fff;
+        background: #315be8;
+        font-weight: 700;
+      }
+
+      .primary-button:disabled {
+        cursor: wait;
+        opacity: 0.65;
+      }
+
+      main {
+        padding: 32px 0 64px;
+      }
+
+      .intro {
+        display: grid;
+        gap: 20px;
+      }
+
+      .panel {
+        border: 1px solid #e0e5ed;
+        border-radius: 16px;
+        padding: 24px;
+        background: #fff;
+        box-shadow: 0 8px 28px rgba(23, 32, 51, 0.04);
+      }
+
+      .panel h2,
+      .panel h3 {
+        margin: 0 0 10px;
+        letter-spacing: -0.03em;
+      }
+
+      .panel h2 {
+        font-size: 24px;
+      }
+
+      .panel h3 {
+        font-size: 16px;
+      }
+
+      .muted {
+        margin: 0;
+        color: #667085;
+        line-height: 1.7;
+      }
+
+      .examples {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 16px;
+      }
+
+      .example-button {
+        border: 1px solid #d8deea;
+        border-radius: 999px;
+        padding: 9px 13px;
+        color: #334155;
+        background: #f8fafc;
+      }
+
+      .example-button:hover {
+        border-color: #315be8;
+        color: #2347bf;
+      }
+
+      .guide-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .guide-item {
+        border-radius: 12px;
+        padding: 16px;
+        background: #f6f8fc;
+      }
+
+      .guide-item strong {
+        display: block;
+        margin-bottom: 7px;
+        color: #2744a3;
+        font-size: 14px;
+      }
+
+      .guide-item span {
+        color: #667085;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .results-header {
+        display: flex;
+        align-items: flex-end;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+
+      .results-header h2 {
+        margin: 0 0 5px;
+        font-size: 20px;
+      }
+
+      .result-count {
+        color: #667085;
+        font-size: 13px;
+      }
+
+      .result-list {
+        display: grid;
+        gap: 12px;
+      }
+
+      .result-card {
+        width: 100%;
+        border: 1px solid #e0e5ed;
+        border-radius: 14px;
+        padding: 20px;
+        text-align: left;
+        color: inherit;
+        background: #fff;
+        box-shadow: 0 5px 18px rgba(23, 32, 51, 0.035);
+        transition: transform 150ms ease, border-color 150ms ease;
+      }
+
+      .result-card:hover {
+        transform: translateY(-2px);
+        border-color: #9aacec;
+      }
+
+      .card-top,
+      .meta,
+      .tags {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 7px;
+      }
+
+      .card-top {
+        justify-content: space-between;
+        margin-bottom: 10px;
+      }
+
+      .case-number {
+        color: #315be8;
+        font-size: 13px;
+        font-weight: 800;
+      }
+
+      .score {
+        border-radius: 999px;
+        padding: 5px 9px;
+        color: #2347bf;
+        background: #edf2ff;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .result-card h3 {
+        margin: 0 0 8px;
+        font-size: 18px;
+        letter-spacing: -0.025em;
+      }
+
+      .meta {
+        margin-bottom: 14px;
+        color: #7a8495;
+        font-size: 12px;
+      }
+
+      .summary {
+        display: -webkit-box;
+        overflow: hidden;
+        margin: 0 0 14px;
+        color: #475467;
+        line-height: 1.65;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+      }
+
+      .tag {
+        border-radius: 6px;
+        padding: 5px 8px;
+        color: #5c6677;
+        background: #f1f3f7;
+        font-size: 11px;
+      }
+
+      .status {
+        padding: 28px 0;
+        color: #667085;
+        text-align: center;
+      }
+
+      .error-box {
+        border: 1px solid #ffc9c9;
+        border-radius: 12px;
+        padding: 16px;
+        color: #a61e2c;
+        background: #fff5f5;
+        line-height: 1.6;
+      }
+
+      .detail-view {
+        display: grid;
+        gap: 16px;
+      }
+
+      .back-button {
+        width: fit-content;
+        border: 1px solid #d8deea;
+        border-radius: 9px;
+        padding: 9px 13px;
+        color: #334155;
+        background: #fff;
+      }
+
+      .detail-title {
+        margin: 8px 0 6px;
+        font-size: 27px;
+        line-height: 1.35;
+        letter-spacing: -0.035em;
+      }
+
+      .detail-section {
+        border-top: 1px solid #e6eaf0;
+        padding-top: 20px;
+      }
+
+      .detail-section h3 {
+        margin: 0 0 10px;
+        font-size: 15px;
+      }
+
+      .detail-text {
+        margin: 0;
+        color: #475467;
+        line-height: 1.75;
+        white-space: pre-wrap;
+      }
+
+      .finding {
+        border-left: 3px solid #b9c7f7;
+        padding: 4px 0 4px 14px;
+      }
+
+      .finding + .finding {
+        margin-top: 16px;
+      }
+
+      details summary {
+        cursor: pointer;
+        color: #315be8;
+        font-weight: 700;
+      }
+
+      .full-content {
+        max-height: 70vh;
+        overflow: auto;
+        margin-top: 14px;
+        border-radius: 10px;
+        padding: 16px;
+        background: #f6f8fc;
+        font-size: 13px;
+      }
+
+      [hidden] {
+        display: none !important;
+      }
+
+      @media (max-width: 720px) {
+        .shell {
+          width: min(100% - 20px, 920px);
+        }
+
+        .search-form {
+          grid-template-columns: 1fr;
+        }
+
+        .guide-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .panel,
+        .result-card {
+          padding: 18px;
+        }
+
+        .brand {
+          align-items: flex-start;
+          flex-direction: column;
+          gap: 5px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="shell">
+        <div class="brand">
+          <h1>판례 하이브리드 검색</h1>
+          <span class="api-state">API · localhost:3000</span>
+        </div>
+        <form class="search-form" id="searchForm">
+          <input
+            class="field"
+            id="queryInput"
+            type="search"
+            maxlength="5000"
+            placeholder="사건 상황, 발언, 법리를 검색"
+            aria-label="통합 검색어"
+            required
+          />
+          <button class="primary-button" id="searchButton" type="submit">검색</button>
+        </form>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="intro" id="introView">
+        <article class="panel">
+          <h2>사건 상황을 그대로 검색해 보세요</h2>
+          <p class="muted">
+            하나의 검색어를 의미 벡터와 핵심 단어로 동시에 검색해 관련도가 높은 판례를 찾습니다.
+          </p>
+          <div class="examples" id="examples">
+            <button class="example-button" type="button">8명 단체 채팅방에서 피해자에게 욕설한 경우 공연성</button>
+            <button class="example-button" type="button">SNS에 허위 사실을 반복해서 게시한 명예훼손 판례</button>
+            <button class="example-button" type="button">메신저로 여러 번 연락해서 불안감을 준 스토킹 사건</button>
+          </div>
+        </article>
+
+        <article class="panel">
+          <h3>검색 결과에서 확인할 수 있는 내용</h3>
+          <div class="guide-grid">
+            <div class="guide-item">
+              <strong>유사도와 판례 정보</strong>
+              <span>종합 점수, 사건번호, 법원, 선고일을 함께 표시합니다.</span>
+            </div>
+            <div class="guide-item">
+              <strong>사건 쟁점</strong>
+              <span>사건 정황, 문제 표현, 죄명과 핵심 키워드를 요약합니다.</span>
+            </div>
+            <div class="guide-item">
+              <strong>판례 상세</strong>
+              <span>목록을 누르면 법원의 판단과 저장된 판례 원문을 확인합니다.</span>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section id="resultsView" hidden>
+        <div class="results-header">
+          <div>
+            <h2 id="resultsTitle">검색 결과</h2>
+            <span class="result-count" id="resultCount"></span>
+          </div>
+        </div>
+        <div class="result-list" id="resultList"></div>
+        <div class="status" id="resultStatus"></div>
+        <div id="scrollSentinel" aria-hidden="true"></div>
+      </section>
+
+      <section class="detail-view" id="detailView" hidden>
+        <button class="back-button" id="backButton" type="button">← 검색 결과로</button>
+        <div id="detailContent"></div>
+      </section>
+    </main>
+
+    <script>
+      const API_BASE_URL = "http://localhost:3000";
+      const PAGE_SIZE = 20;
+      const state = {
+        query: "",
+        offset: 0,
+        loading: false,
+        hasMore: false,
+        results: [],
+        selectedId: null,
+      };
+
+      const elements = {
+        form: document.querySelector("#searchForm"),
+        query: document.querySelector("#queryInput"),
+        button: document.querySelector("#searchButton"),
+        intro: document.querySelector("#introView"),
+        results: document.querySelector("#resultsView"),
+        resultsTitle: document.querySelector("#resultsTitle"),
+        resultCount: document.querySelector("#resultCount"),
+        list: document.querySelector("#resultList"),
+        status: document.querySelector("#resultStatus"),
+        sentinel: document.querySelector("#scrollSentinel"),
+        detail: document.querySelector("#detailView"),
+        detailContent: document.querySelector("#detailContent"),
+        back: document.querySelector("#backButton"),
+        examples: document.querySelector("#examples"),
+      };
+
+      function formatDate(value) {
+        if (!value) return "선고일 미상";
+        const date = new Date(value);
+        return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString("ko-KR");
+      }
+
+      function createTextElement(tag, className, text) {
+        const element = document.createElement(tag);
+        if (className) element.className = className;
+        element.textContent = text || "";
+        return element;
+      }
+
+      function createTags(values) {
+        const container = document.createElement("div");
+        container.className = "tags";
+        values.filter(Boolean).slice(0, 8).forEach((value) => {
+          container.append(createTextElement("span", "tag", value));
+        });
+        return container;
+      }
+
+      function createResultCard(result) {
+        const card = document.createElement("button");
+        card.type = "button";
+        card.className = "result-card";
+        card.addEventListener("click", () => openDetail(result));
+
+        const top = document.createElement("div");
+        top.className = "card-top";
+        top.append(
+          createTextElement("span", "case-number", result.caseNumber || `판례 ${result.precedentId}`),
+          createTextElement("span", "score", `종합 ${(result.score.overall * 100).toFixed(1)}%`),
+        );
+
+        const meta = document.createElement("div");
+        meta.className = "meta";
+        meta.append(
+          createTextElement("span", "", result.courtName || "법원 미상"),
+          createTextElement("span", "", "·"),
+          createTextElement("span", "", formatDate(result.judgementDate)),
+          createTextElement("span", "", "·"),
+          createTextElement("span", "", `벡터 ${(result.score.vector * 100).toFixed(1)}%`),
+        );
+
+        card.append(
+          top,
+          createTextElement("h3", "", result.caseName || "사건명 없음"),
+          meta,
+          createTextElement("p", "summary", result.searchSummary),
+          createTags([...(result.crimeTypes || []), ...(result.keywords || [])]),
+        );
+        return card;
+      }
+
+      async function readError(response) {
+        try {
+          const body = await response.json();
+          return Array.isArray(body.message) ? body.message.join(" ") : body.message || response.statusText;
+        } catch {
+          return response.statusText || "요청에 실패했습니다.";
+        }
+      }
+
+      async function loadMore() {
+        if (state.loading || !state.hasMore) return;
+        state.loading = true;
+        elements.button.disabled = true;
+        elements.status.textContent = "판례를 검색하고 있습니다…";
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/precedent/search`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              query: state.query,
+              mode: "hybrid",
+              limit: PAGE_SIZE,
+              offset: state.offset,
+              filters: {},
+            }),
+          });
+
+          if (!response.ok) throw new Error(await readError(response));
+          const body = await response.json();
+          const incoming = body.results || [];
+          const knownIds = new Set(state.results.map((item) => item.precedentId));
+          const unique = incoming.filter((item) => !knownIds.has(item.precedentId));
+          state.results.push(...unique);
+          state.offset += incoming.length;
+          state.hasMore = incoming.length === PAGE_SIZE;
+          unique.forEach((result) => elements.list.append(createResultCard(result)));
+          elements.resultCount.textContent = `${state.results.length}건 불러옴`;
+          elements.status.textContent = state.hasMore
+            ? "아래로 스크롤하면 다음 결과를 불러옵니다."
+            : state.results.length
+              ? "모든 검색 결과를 불러왔습니다."
+              : "검색 결과가 없습니다.";
+        } catch (error) {
+          state.hasMore = false;
+          elements.status.textContent = "";
+          const box = createTextElement("div", "error-box", error.message);
+          elements.list.append(box);
+        } finally {
+          state.loading = false;
+          elements.button.disabled = false;
+        }
+      }
+
+      async function startSearch(query) {
+        state.query = query.trim();
+        state.offset = 0;
+        state.results = [];
+        state.hasMore = true;
+        elements.list.replaceChildren();
+        elements.resultCount.textContent = "";
+        elements.resultsTitle.textContent = `“${state.query}” 검색 결과`;
+        elements.intro.hidden = true;
+        elements.detail.hidden = true;
+        elements.results.hidden = false;
+        window.scrollTo({ top: 0, behavior: "smooth" });
+        await loadMore();
+      }
+
+      function appendDetailSection(container, title, value) {
+        if (!value) return;
+        const section = document.createElement("section");
+        section.className = "detail-section";
+        section.append(
+          createTextElement("h3", "", title),
+          createTextElement("p", "detail-text", value),
+        );
+        container.append(section);
+      }
+
+      function renderDetail(result, detail) {
+        const container = document.createElement("article");
+        container.className = "panel";
+        container.append(
+          createTextElement("span", "case-number", detail.caseNumber || result.caseNumber || `판례 ${result.precedentId}`),
+          createTextElement("h2", "detail-title", detail.caseName || result.caseName || "사건명 없음"),
+          createTextElement(
+            "p",
+            "muted",
+            `${detail.courtName || result.courtName || "법원 미상"} · ${formatDate(detail.judgementDate || result.judgementDate)}`,
+          ),
+          createTags([...(result.crimeTypes || []), ...(result.keywords || [])]),
+        );
+
+        appendDetailSection(container, "검색 쟁점 요약", result.searchSummary);
+        appendDetailSection(container, "사실관계", result.factPattern);
+        appendDetailSection(container, "문제 표현", (result.evidenceTexts || []).join("\n"));
+        appendDetailSection(container, "판례 요약", detail.summary || detail.gist);
+
+        if (result.courtFindings && result.courtFindings.length) {
+          const findings = document.createElement("section");
+          findings.className = "detail-section";
+          findings.append(createTextElement("h3", "", "법원의 판단"));
+          result.courtFindings.forEach((finding) => {
+            const item = document.createElement("div");
+            item.className = "finding";
+            item.append(
+              createTextElement("strong", "", finding.courtName || finding.courtLevel),
+              createTextElement("p", "detail-text", finding.holding),
+              createTextElement("p", "detail-text", finding.evidenceAssessment),
+            );
+            findings.append(item);
+          });
+          container.append(findings);
+        }
+
+        appendDetailSection(container, "참조 법령", detail.refLaws);
+
+        if (detail.fullContent) {
+          const section = document.createElement("section");
+          section.className = "detail-section";
+          const disclosure = document.createElement("details");
+          disclosure.append(
+            createTextElement("summary", "", "판례 원문 보기"),
+            createTextElement("pre", "detail-text full-content", detail.fullContent),
+          );
+          section.append(disclosure);
+          container.append(section);
+        }
+
+        elements.detailContent.replaceChildren(container);
+      }
+
+      async function openDetail(result) {
+        state.selectedId = result.precedentId;
+        elements.results.hidden = true;
+        elements.detail.hidden = false;
+        elements.detailContent.replaceChildren(createTextElement("div", "status", "판례 상세를 불러오고 있습니다…"));
+        history.pushState({ detail: result.precedentId }, "", `#precedent-${result.precedentId}`);
+        window.scrollTo({ top: 0, behavior: "smooth" });
+
+        try {
+          const response = await fetch(`${API_BASE_URL}/precedent/stored/${encodeURIComponent(result.precedentId)}`);
+          if (!response.ok) throw new Error(await readError(response));
+          renderDetail(result, await response.json());
+        } catch (error) {
+          elements.detailContent.replaceChildren(createTextElement("div", "error-box", error.message));
+        }
+      }
+
+      function showResults() {
+        state.selectedId = null;
+        elements.detail.hidden = true;
+        elements.results.hidden = false;
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+
+      elements.form.addEventListener("submit", async (event) => {
+        event.preventDefault();
+        await startSearch(elements.query.value);
+      });
+
+      elements.examples.addEventListener("click", (event) => {
+        const button = event.target.closest("button");
+        if (!button) return;
+        elements.query.value = button.textContent.trim();
+        elements.query.focus();
+      });
+
+      elements.back.addEventListener("click", () => history.back());
+
+      window.addEventListener("popstate", () => {
+        if (state.results.length) showResults();
+      });
+
+      const observer = new IntersectionObserver(
+        (entries) => {
+          if (entries.some((entry) => entry.isIntersecting)) loadMore();
+        },
+        { rootMargin: "300px" },
+      );
+      observer.observe(elements.sentinel);
+    </script>
+  </body>
+</html>

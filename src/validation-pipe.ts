@@ -3,7 +3,8 @@
  *
  * 노션 Endpoint 명세의 에러 바디는 `{ "message": "한 문장" }` 이다. class-validator 기본값은
  * message 가 문자열 배열이라, 검증 실패 메시지를 한 문자열로 합쳐 내보낸다.
- * whitelist: true 라서 검증 데코레이터가 없는 DTO 필드는 조용히 제거된다.
+ * whitelist + forbidNonWhitelisted 라서 검증 데코레이터가 없는 DTO 필드가 오면 400이다
+ * (팀 main 설정). 필드를 추가할 땐 반드시 데코레이터를 붙일 것.
  */
 import {
   BadRequestException,
@@ -21,6 +22,8 @@ function collectMessages(errors: ValidationError[]): string[] {
 export function buildValidationPipe(): ValidationPipe {
   return new ValidationPipe({
     whitelist: true,
+    forbidNonWhitelisted: true,
+    stopAtFirstError: true,
     transform: true,
     exceptionFactory: (errors) =>
       new BadRequestException(collectMessages(errors).join(' · ')),
