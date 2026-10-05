@@ -8,7 +8,7 @@ import { AppModule } from './app.module';
 import { buildValidationPipe } from './validation-pipe';
 
 /**
- * AI_API_KEY를 Anthropic SDK가 읽는 ANTHROPIC_API_KEY로 옮긴다.
+ * CLAUDE_AI_API_KEY를 Anthropic SDK가 읽는 ANTHROPIC_API_KEY로 옮긴다.
  * ConfigModule도 .env를 읽지만 이 이름 변환은 하지 않으므로 부팅 전에 직접 처리한다.
  * (키가 없으면 분석 요청 시점에 실패한다)
  */
@@ -25,8 +25,8 @@ function loadEnv() {
       .replace(/^["']|["']$/g, '');
     if (k && v && !process.env[k]) process.env[k] = v;
   }
-  if (process.env.AI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
-    process.env.ANTHROPIC_API_KEY = process.env.AI_API_KEY;
+  if (process.env.CLAUDE_AI_API_KEY && !process.env.ANTHROPIC_API_KEY) {
+    process.env.ANTHROPIC_API_KEY = process.env.CLAUDE_AI_API_KEY;
   }
 }
 

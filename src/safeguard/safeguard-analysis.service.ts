@@ -27,7 +27,7 @@ import type {
 } from './precedent-provider';
 import { anonymizeInput, deanonymize } from './anonymizer';
 
-const MODEL = 'claude-opus-5';
+const MODEL = 'claude-opus-5-5';
 
 // ── 입력 타입 ─────────────────────────────────────────────────────────
 /** 대화 장소 = 공연성 판단의 최상위 분기 (대법원 2020도5813 전합) */
