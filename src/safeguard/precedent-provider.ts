@@ -5,12 +5,15 @@
  * targetText와 가장 가까운 판례 문구 3개를 자연어 검색으로 리턴한다.
  * 이 파일은 그 모듈의 입출력 계약을 타입으로 고정한다.
  *
- * 연결 방법: PrecedentProvider 를 구현한 클래스를 만들고
- * SafeguardAnalysisService 의 precedents 필드를 교체하면 된다.
+ * 연결 방법: PrecedentProvider 를 구현한 클래스를 PRECEDENT_PROVIDER 토큰으로 제공한다
+ * (safeguard-infra.module.ts). 엔진은 이 토큰으로 주입받는다.
  *
  * 계약에서 한 가지 제안: 원안에는 targetMessageId가 출력에만 있는데,
  * 응답 순서 의존을 없애기 위해 입력에도 포함했다. (메시지 번호를 그대로 씀)
  */
+
+/** 판례 매칭 구현의 DI 토큰 — 운영 구현은 safeguard-infra.module.ts 가 정한다 */
+export const PRECEDENT_PROVIDER = Symbol('PRECEDENT_PROVIDER');
 
 export interface LegalContext {
   /** 공연성 판단 (1:1 vs 단톡방) */
@@ -44,7 +47,7 @@ export interface PrecedentProvider {
 }
 
 /**
- * 벡터 DB 모듈이 연결되기 전까지의 자리표시자 — 판례를 하나도 매칭하지 않는다.
+ * 판례를 하나도 매칭하지 않는 구현 — 테스트용이자 벡터 검색 실패 시의 대체 동작.
  *
  * 파이프라인은 그대로 동작한다: 2차 판단 프롬프트가
  * "적합한 판례가 없어도 명백히 유해한 발언은 기준으로 판단하라"를 포함하므로,

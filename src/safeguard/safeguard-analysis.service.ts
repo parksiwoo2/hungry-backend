@@ -14,12 +14,12 @@
  *
  * deps: npm i @anthropic-ai/sdk zod
  */
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { LawRegistry, REMOVAL_TRACK, CIVIL_TRACK } from './law-registry';
-import { NoopPrecedentProvider } from './precedent-provider';
+import { PRECEDENT_PROVIDER } from './precedent-provider';
 import type {
   AnalysisTarget,
   PrecedentMatchOutput,
@@ -255,8 +255,11 @@ export class SafeguardAnalysisService {
   }
 
   private readonly laws = new LawRegistry();
-  /** 판례 매칭 모듈(벡터 DB) 연결 지점 — 팀원 구현이 오면 이 필드를 교체 */
-  private readonly precedents: PrecedentProvider = new NoopPrecedentProvider();
+
+  /** 판례 매칭 모듈(벡터 DB) 연결 지점 — 구현은 PRECEDENT_PROVIDER 토큰으로 주입된다 */
+  constructor(
+    @Inject(PRECEDENT_PROVIDER) private readonly precedents: PrecedentProvider,
+  ) {}
 
   /** 대화에 번호 매기기 — 시스템 이벤트도 함께 (방폭 탐지에 필수) */
   private numberConversation(input: AnalyzeInput): string {
@@ -469,6 +472,24 @@ export class SafeguardAnalysisService {
     ].sort((a, b) => a - b);
   }
 
+  /**
+   * 2차가 낸 판례 번호 중 매칭 사전에 없는 것을 걷어낸다.
+   * 프롬프트가 "제공된 사건번호 외는 지어내지 마라"고 하지만 스키마는 문자열 배열일 뿐이라
+   * 지어낸 번호가 응답·저장으로 새는 것을 코드가 한 번 더 막는다.
+   */
+  private keepKnownPrecedents(
+    ids: string[],
+    dict: Record<string, string>,
+  ): string[] {
+    const unknown = ids.filter((id) => !(id in dict));
+    if (unknown.length) {
+      this.logger.warn(
+        `2차 판단: 사전에 없는 판례 번호 제거 — ${unknown.join(', ')}`,
+      );
+    }
+    return ids.filter((id) => id in dict);
+  }
+
   /** 메시지 한 줄 표기 — 원문 윈도우용 */
   private formatLine(m: ChatMessage, no: number, mark: boolean): string {
     const label = {
@@ -644,6 +665,10 @@ export class SafeguardAnalysisService {
         ...f,
         messageNos: this.sanitizeNos(f.messageNos, total),
         reason: deanonymize(f.reason, map),
+        appliedPrecedentIds: this.keepKnownPrecedents(
+          f.appliedPrecedentIds,
+          matched.precedentDict,
+        ),
       }))
       .filter((f) => f.messageNos.length > 0)
       .sort((a, b) => a.messageNos[0] - b.messageNos[0]);

@@ -1,13 +1,22 @@
 /**
  * 세션 → 분석 → 조회 → PDF 전체 흐름. AI 엔진(analyze)만 스텁으로 바꾸고
  * 저장소는 메모리 SQLite, PDF 생성기는 스텁(실제 PDF는 서버 수동 E2E로 확인).
+ *
+ * AppModule 이 아니라 SafeguardModule 만 올린다 — AppModule 은 Postgres 연결이 있어야 뜬다.
+ * 운영 인프라(Postgres 저장소 · 판례 벡터 검색)는 SafeguardInfraModule 한곳에 모여 있어
+ * 그 모듈만 테스트용으로 갈아 끼우면 DB·외부 API 없이 라우트·검증·저장 흐름을 본다.
  */
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication } from '@nestjs/common';
+import { INestApplication, Module } from '@nestjs/common';
 import request from 'supertest';
 import { App } from 'supertest/types';
-import { AppModule } from './../src/app.module';
 import { buildValidationPipe } from './../src/validation-pipe';
+import { SafeguardModule } from './../src/safeguard/safeguard.module';
+import { SafeguardInfraModule } from './../src/safeguard/safeguard-infra.module';
+import {
+  NoopPrecedentProvider,
+  PRECEDENT_PROVIDER,
+} from './../src/safeguard/precedent-provider';
 import { SAFEGUARD_STORE } from './../src/safeguard/storage/safeguard-store';
 import { SqliteSafeguardStore } from './../src/safeguard/storage/sqlite-safeguard-store';
 import { SafeguardAnalysisService } from './../src/safeguard/safeguard-analysis.service';
@@ -51,11 +60,21 @@ describe('Safeguard API (e2e)', () => {
 
   beforeAll(async () => {
     store = new SqliteSafeguardStore(':memory:');
-    const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [AppModule],
+
+    @Module({
+      providers: [
+        { provide: SAFEGUARD_STORE, useValue: store },
+        { provide: PRECEDENT_PROVIDER, useClass: NoopPrecedentProvider },
+      ],
+      exports: [SAFEGUARD_STORE, PRECEDENT_PROVIDER],
     })
-      .overrideProvider(SAFEGUARD_STORE)
-      .useValue(store)
+    class TestInfraModule {}
+
+    const moduleFixture: TestingModule = await Test.createTestingModule({
+      imports: [SafeguardModule],
+    })
+      .overrideModule(SafeguardInfraModule)
+      .useModule(TestInfraModule)
       .compile();
 
     app = moduleFixture.createNestApplication();

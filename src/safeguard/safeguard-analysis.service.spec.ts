@@ -3,6 +3,10 @@ import {
   AnalyzeInput,
 } from './safeguard-analysis.service';
 import { parseKakao } from './kakao-parser';
+import {
+  NoopPrecedentProvider,
+  type PrecedentProvider,
+} from './precedent-provider';
 
 // 1:1 샘플과 같은 구조의 작은 대화 — 구간 로직(AI 호출 없음)만 검증한다
 const RAW = [
@@ -29,7 +33,7 @@ function input(): AnalyzeInput {
 }
 
 describe('SafeguardAnalysisService — 구간 단위 로직', () => {
-  const svc = new SafeguardAnalysisService();
+  const svc = new SafeguardAnalysisService(new NoopPrecedentProvider());
 
   it('buildAnalysisTargets: 구간 하나가 타깃 하나, targetText = 요약 + 원문', () => {
     const targets = svc.buildAnalysisTargets(input(), {
@@ -151,5 +155,42 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
       },
     ];
     expect(svc.detectSystemPatterns(msgs, '을')).toEqual(['방폭']);
+  });
+
+  it('analyze: 2차가 낸 판례 번호 중 매칭 사전에 없는 것은 걷어낸다', async () => {
+    // 프롬프트로만 금지하던 것 — 사전에 없는 사건번호가 응답·문서로 새지 않게 코드가 막는다
+    const provider: PrecedentProvider = {
+      match: (inp) =>
+        Promise.resolve({
+          precedentDict: { '2006도546': '대법원 2006도546: 요지' },
+          analysisTargets: inp.analysisTargets.map((t) => ({
+            ...t,
+            matchedPrecedentIds: ['2006도546'],
+          })),
+        }),
+    };
+    const engine = new SafeguardAnalysisService(provider);
+    jest.spyOn(engine, 'screen').mockResolvedValue({
+      segments: [
+        { messageNos: [6], victimIdentifiable: true, summary: '해악을 알림' },
+      ],
+      patterns: [],
+    });
+    jest.spyOn(engine, 'judge').mockResolvedValue({
+      flagged: [
+        {
+          messageNos: [6],
+          harmTypes: ['협박'],
+          severity: '즉시조치',
+          reason: '해악 고지',
+          appliedPrecedentIds: ['2006도546', '9999도1'],
+        },
+      ],
+      patterns: [],
+    });
+
+    const r = await engine.analyze(input());
+
+    expect(r.flagged[0].appliedPrecedentIds).toEqual(['2006도546']);
   });
 });
