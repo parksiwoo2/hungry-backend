@@ -8,6 +8,7 @@ import { CreateUsers20260922000000 } from './migrations/20260922000000-create-us
 import { CreateSafeguardTables20261005000000 } from './migrations/20261005000000-create-safeguard-tables';
 import { UsersModule } from './users/users.module';
 import { SafeguardModule } from './safeguard/safeguard.module';
+import { ActionsModule } from './actions/actions.module';
 
 @Module({
   imports: [
@@ -35,6 +36,7 @@ import { SafeguardModule } from './safeguard/safeguard.module';
     PrecedentModule,
     UsersModule,
     SafeguardModule,
+    ActionsModule,
   ],
 })
 export class AppModule {}
