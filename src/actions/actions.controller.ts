@@ -6,7 +6,7 @@ import {
 import { ActionsService } from './actions.service';
 import { Action } from './interfaces/action.interface';
 
-@Controller('analyses')
+@Controller('api/analyses')
 export class ActionsController {
   constructor(private readonly actionsService: ActionsService) {}
 

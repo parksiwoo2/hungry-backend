@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Hungry Backend — 행동 가이드</title>
+<link rel="stylesheet" href="safeguard-theme.css">
+</head>
+<body>
+
+<div class="phone">
+  <div class="appbar can-back" id="appbar">
+    <button class="back" id="btnBack" type="button">‹ 분석 결과</button>
+    <svg class="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M12 2.5 L20 5.5 V11 C20 16.5 16.6 20.4 12 21.8 C7.4 20.4 4 16.5 4 11 V5.5 Z" fill="var(--accent)" opacity=".14"/>
+      <path d="M12 2.5 L20 5.5 V11 C20 16.5 16.6 20.4 12 21.8 C7.4 20.4 4 16.5 4 11 V5.5 Z" stroke="var(--accent)" stroke-width="1.8" stroke-linejoin="round"/>
+      <path d="M8.6 11.6 L11 14 L15.6 9.2" stroke="var(--accent)" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div class="name">Hungry Backend</div>
+  </div>
+
+  <main class="has-cta">
+    <section class="screen on" id="scr-actions">
+      <h1 style="margin-top:14px;">행동 가이드</h1>
+      <p class="sub" style="margin-top:6px;" id="aSub">분석 결과에 맞춰 지금 할 수 있는 행동을 순서대로 모았어요.</p>
+
+      <div class="stack">
+        <div class="card result-hero">
+          <div class="count num" id="aCount"></div>
+          <div class="period" id="aNote"></div>
+          <div class="stat-chips" id="aChips" style="margin-top:12px;"></div>
+        </div>
+
+        <form class="card" id="idForm" hidden>
+          <p class="label">분석 ID</p>
+          <input class="field" id="idInput" placeholder="ana_..." autocomplete="off" spellcheck="false">
+          <button class="btn primary" type="submit" style="margin-top:12px;">행동 가이드 열기</button>
+        </form>
+
+        <div id="tiers" class="stack">
+          <div><p class="label">지금 바로 필요한 도움</p><div class="stack" style="gap:10px;" id="aTier0"></div></div>
+          <div><p class="label">기본 행동 대응</p><div class="stack" style="gap:10px;" id="aTier1"></div></div>
+          <div><p class="label">상황별 대응</p><div class="stack" style="gap:10px;" id="aTier2"></div></div>
+        </div>
+
+        <p class="foot">
+          본 가이드는 분석 결과에 따라 자동으로 고른 참고용 안내이며 법률 자문이 아닙니다.
+          위급할 때는 112, 학교폭력 신고 117, 청소년 상담 1388로 연락하세요.
+        </p>
+      </div>
+    </section>
+  </main>
+
+  <div class="cta-wrap"><div class="cta-inner" id="ctaInner"></div></div>
+  <div class="toast" id="toast"></div>
+</div>
+
+<script>
+"use strict";
+/* ─────────────────────────────────────────────────────────────
+   행동 제시 페이지 — /actions.html?analysisId=ana_…
+   · GET /api/analyses/{id}/actions — 카드는 서버가 priority 순으로 내려준다
+   · 카드가 0장이어도 숨기지 않고 "0장 / 해당 없음"으로 그대로 보여준다
+   · 분석 결과 화면: /safeguard-ui-temp.html?analysisId=ana_…
+   ───────────────────────────────────────────────────────────── */
+const $ = (id) => document.getElementById(id);
+const RESULT_PAGE = "safeguard-ui-temp.html";
+const TIERS = [
+  { tier: 0, label: "긴급", cls: "s3", box: "aTier0" },
+  { tier: 1, label: "기본 수칙", cls: "a1", box: "aTier1" },
+  { tier: 2, label: "상황별 대처", cls: "s2", box: "aTier2" },
+];
+const NONE = '<span class="stat-chip">해당 없음</span>';
+const id = new URLSearchParams(location.search).get("analysisId");
+
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+let toastTimer;
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove("show"), 3000);
+}
+
+function cta() {
+  $("ctaInner").innerHTML = id
+    ? '<button class="btn primary" id="btnResult" type="button">분석 결과로 돌아가기</button>'
+    : "";
+  if (id) $("btnResult").addEventListener("click", toResult);
+}
+function toResult() { location.href = RESULT_PAGE + (id ? "?analysisId=" + encodeURIComponent(id) : ""); }
+$("btnBack").addEventListener("click", toResult);
+
+// list === null: 불러오는 중(err가 있으면 실패) / 배열: 빈 배열이어도 그대로 출력
+function render(list, err) {
+  if (list === null) {
+    $("aCount").style.fontSize = "22px";
+    $("aCount").textContent = err ? "불러오지 못했어요" : "불러오는 중…";
+    $("aNote").textContent = err || "";
+    $("aChips").innerHTML = "";
+    TIERS.forEach((t) => { $(t.box).innerHTML = NONE; });
+    return;
+  }
+  $("aCount").style.fontSize = "";
+  $("aCount").innerHTML = list.length + "<small> 장의 행동 카드</small>";
+  $("aNote").textContent = list.length ? "우선순위 순서대로 정렬했어요" : "이 분석에는 연결된 행동 카드가 없어요";
+
+  // 알 수 없는 tier의 카드도 숨기지 않고 상황별 대응에 함께 싣는다
+  const known = new Set(TIERS.map((t) => t.tier));
+  const by = (t) => list.filter((a) => (t === 2 ? a.tier === 2 || !known.has(a.tier) : a.tier === t));
+  $("aChips").innerHTML = TIERS.map((t) =>
+    '<span class="stat-chip' + (t.tier === 0 && by(0).length ? " warn" : "") + '">' + t.label +
+    ' <b class="num">' + by(t.tier).length + "</b></span>").join("");
+
+  TIERS.forEach((t) => {
+    const cards = by(t.tier);
+    $(t.box).innerHTML = cards.length ? cards.map((a) =>
+      '<div class="item ' + t.cls + '">' +
+        '<div class="head num"><span>우선순위 ' + esc(a.priority) + '</span><span class="sev">' + t.label + "</span></div>" +
+        '<div class="act-title">' + esc(a.title) + "</div>" +
+        '<div class="why">' + esc(a.description) + "</div>" +
+        '<div class="act-id num">' + esc(a.id) + "</div>" +
+      "</div>").join("") : NONE;
+  });
+}
+
+async function load() {
+  render(null);
+  try {
+    const res = await fetch("/api/analyses/" + encodeURIComponent(id) + "/actions");
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 404) throw new Error("해당 분석을 찾을 수 없어요");
+    if (!res.ok) throw new Error(data.message || "행동 가이드를 불러오지 못했어요 (" + res.status + ")");
+    render(Array.isArray(data.actions) ? data.actions : []);
+  } catch (e) {
+    render(null, e.message);
+    toast(e.message);
+  }
+}
+
+cta();
+if (id) {
+  $("aSub").textContent = "분석 " + id;
+  load();
+} else {
+  // 분석 ID 없이 열면 입력 칸만 보여 준다 (카드 영역은 분석이 정해진 뒤에 의미가 있다)
+  $("aCount").style.fontSize = "22px";
+  $("aCount").textContent = "분석 ID가 필요해요";
+  $("aNote").textContent = "주소 끝에 ?analysisId=ana_… 를 붙이거나 아래에 입력하세요.";
+  $("tiers").style.display = "none"; // .stack 의 display 가 hidden 속성을 덮어쓰므로 style 로 숨긴다
+  $("idForm").hidden = false;
+  $("idForm").addEventListener("submit", (e) => {
+    e.preventDefault();
+    const v = $("idInput").value.trim();
+    if (v) location.search = "?analysisId=" + encodeURIComponent(v);
+  });
+}
+</script>
+</body>
+</html>

@@ -39,6 +39,8 @@ async function bootstrap() {
   app.useBodyParser('json', { limit: '5mb' });
   app.useGlobalPipes(buildValidationPipe());
 
+  app.useStaticAssets(path.join(process.cwd(), 'public'));
+
   app.use((request: Request, response: Response, next: NextFunction) => {
     const startedAt = Date.now();
 
@@ -52,7 +54,7 @@ async function bootstrap() {
   });
   await app.listen(process.env.PORT ?? 3000);
   console.log(
-    `Safe Guard 백엔드 — http://localhost:${process.env.PORT ?? 3000}`,
-  );
-}
+    `Safe Guard 백엔드 — http://localhost:${process.env.PORT ?? 3000}`);
+  }
+  
 void bootstrap();

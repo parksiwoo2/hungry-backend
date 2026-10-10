@@ -7,8 +7,7 @@ import {
 import * as path from 'path';
 import * as fs from 'fs';
 import { Action } from './interfaces/action.interface';
-import { AnalysesService } from '../analyses/analyses.service';
-import { AnalysisResult } from '../analyses/interfaces/analysis-result.interface';
+import { AnalysesService, AnalysisResponse } from '../safeguard/analyses.service';
 
 @Injectable()
 export class ActionsService implements OnModuleInit {
@@ -31,7 +30,7 @@ export class ActionsService implements OnModuleInit {
    * actionIds를 추출하여 카드로 매핑한다.
    */
   async mapActionsByAnalysis(analysisId: string): Promise<{ actions: Action[] }> {
-    let analysis: AnalysisResult;
+    let analysis: AnalysisResponse;
     try {
       analysis = await this.analysesService.get(analysisId);
     } catch (err: any) {
