@@ -6,9 +6,11 @@ import { EnsurePrecedentSchema20260816000000 } from './migrations/20260816000000
 import { CreatePrecedentAnalyses20260816010000 } from './migrations/20260816010000-create-precedent-analyses';
 import { CreateUsers20260922000000 } from './migrations/20260922000000-create-users';
 import { CreateSafeguardTables20261005000000 } from './migrations/20261005000000-create-safeguard-tables';
+import { CreateChatTables20261011000000 } from './migrations/20261011000000-create-chat-tables';
 import { UsersModule } from './users/users.module';
 import { SafeguardModule } from './safeguard/safeguard.module';
 import { ActionsModule } from './actions/actions.module';
+import { ChatsModule } from './chats/chats.module';
 
 @Module({
   imports: [
@@ -29,6 +31,7 @@ import { ActionsModule } from './actions/actions.module';
           CreatePrecedentAnalyses20260816010000,
           CreateUsers20260922000000,
           CreateSafeguardTables20261005000000,
+          CreateChatTables20261011000000,
         ],
         migrationsRun: true,
       }),
@@ -37,6 +40,7 @@ import { ActionsModule } from './actions/actions.module';
     UsersModule,
     SafeguardModule,
     ActionsModule,
+    ChatsModule,
   ],
 })
 export class AppModule {}
