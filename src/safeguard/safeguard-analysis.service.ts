@@ -15,6 +15,7 @@
  * deps: npm i @anthropic-ai/sdk zod
  */
 import { Inject, Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
@@ -27,7 +28,7 @@ import type {
 } from './precedent-provider';
 import { anonymizeInput, deanonymize } from './anonymizer';
 
-const MODEL = 'claude-opus-5-5';
+const DEFAULT_MODEL = 'claude-opus-5-5';
 
 // ── 입력 타입 ─────────────────────────────────────────────────────────
 /** 대화 장소 = 공연성 판단의 최상위 분기 (대법원 2020도5813 전합) */
@@ -119,7 +120,7 @@ const Judged = z.object({
     .describe('판단 근거 한 줄. 판례를 적용했으면 그 취지를 반영'),
   appliedPrecedentIds: z
     .array(z.string())
-    .describe('실제 판단 근거로 삼은 판례 사건번호. 없으면 빈 배열'),
+    .describe('실제 판단 근거로 삼은 판례 일련번호(ID). 없으면 빈 배열'),
 });
 const JudgmentResult = z.object({ judged: z.array(Judged) });
 export type FlaggedItem = z.infer<typeof Judged>;
@@ -204,7 +205,7 @@ const SYSTEM_JUDGE = `너는 사이버폭력 후보 구간의 2차 판단자다.
 - 판례는 유사도 순 후보일 뿐 적용을 보증하지 않는다. 사안과 무관하면 버려라.
 - 실제 판단의 근거로 삼은 판례만 appliedPrecedentIds에 넣어라. 없으면 빈 배열.
 - 적합한 판례가 없어도 명백히 유해한 행위는 아래 기준으로 판단하라.
-- 제공된 사건번호 외의 판례를 지어내지 마라.
+- appliedPrecedentIds에는 제공된 판례 사전의 ID만 넣어라. 사건번호와 혼동하거나 새 ID를 지어내지 마라.
 
 ## 구간 탈락·분리
 - 1차는 애매한 것을 모두 포함했다. 유해성이 인정되지 않는 구간은 반환하지 마라.
@@ -251,7 +252,13 @@ export class SafeguardAnalysisService {
   private readonly logger = new Logger(SafeguardAnalysisService.name);
   private _client?: Anthropic;
   private get client(): Anthropic {
-    return (this._client ??= new Anthropic()); // ANTHROPIC_API_KEY 환경변수
+    return (this._client ??= new Anthropic({
+      apiKey:
+        this.config.get<string>('ANTHROPIC_API_KEY') ||
+        this.config.get<string>('CLAUDE_AI_API_KEY'),
+      timeout: 120_000,
+      maxRetries: 1,
+    }));
   }
 
   private readonly laws = new LawRegistry();
@@ -259,6 +266,7 @@ export class SafeguardAnalysisService {
   /** 판례 매칭 모듈(벡터 DB) 연결 지점 — 구현은 PRECEDENT_PROVIDER 토큰으로 주입된다 */
   constructor(
     @Inject(PRECEDENT_PROVIDER) private readonly precedents: PrecedentProvider,
+    private readonly config: ConfigService = new ConfigService(),
   ) {}
 
   /** 대화에 번호 매기기 — 시스템 이벤트도 함께 (방폭 탐지에 필수) */
@@ -356,7 +364,7 @@ export class SafeguardAnalysisService {
     effort: 'low' | 'medium',
   ): Promise<z.infer<S>> {
     const response = await this.client.messages.create({
-      model: MODEL,
+      model: this.config.get<string>('ANALYSIS_MODEL', DEFAULT_MODEL),
       max_tokens: 8000,
       system,
       messages: [{ role: 'user', content }],

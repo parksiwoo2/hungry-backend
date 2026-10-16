@@ -61,6 +61,14 @@ describe('User DTO validation', () => {
     expect(await validate(short)).not.toHaveLength(0);
     expect(await validate(none)).toHaveLength(0);
   });
+
+  it.each(['email', 'nickName', 'maskingIcon'])(
+    'rejects explicit null for %s',
+    async (field) => {
+      const input = plainToInstance(UpdateUserDto, { [field]: null });
+      expect(await validate(input)).not.toHaveLength(0);
+    },
+  );
 });
 
 describe('UsersService', () => {

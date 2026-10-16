@@ -30,9 +30,9 @@ export class ChatGeminiLlmService extends ChatLlmService {
     system: string,
     messages: LlmMessage[],
   ): Promise<ChatReply> {
-    const apiKey = process.env.GEMINI_API_KEY;
+    const apiKey = this.config.get<string>('GEMINI_API_KEY');
     if (!apiKey) throw new Error('GEMINI_API_KEY 가 설정되지 않음');
-    const model = process.env.GEMINI_MODEL || DEFAULT_MODEL;
+    const model = this.config.get<string>('GEMINI_MODEL') || DEFAULT_MODEL;
 
     const res = await fetch(
       `${ENDPOINT}/${encodeURIComponent(model)}:generateContent`,

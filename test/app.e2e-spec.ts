@@ -1,13 +1,15 @@
 /**
  * 세션 → 분석 → 조회 → PDF 전체 흐름. AI 엔진(analyze)만 스텁으로 바꾸고
- * 저장소는 메모리 SQLite, PDF 생성기는 스텁(실제 PDF는 서버 수동 E2E로 확인).
+ * 저장소는 PostgreSQL 임시 스키마, PDF 생성기는 스텁이다.
  *
  * AppModule 이 아니라 SafeguardModule 만 올린다 — AppModule 은 Postgres 연결이 있어야 뜬다.
  * 운영 인프라(Postgres 저장소 · 판례 벡터 검색)는 SafeguardInfraModule 한곳에 모여 있어
  * 그 모듈만 테스트용으로 갈아 끼우면 DB·외부 API 없이 라우트·검증·저장 흐름을 본다.
  */
 import { Test, TestingModule } from '@nestjs/testing';
-import { Injectable, INestApplication, Module } from '@nestjs/common';
+import { Global, Injectable, INestApplication, Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { DataSource } from 'typeorm';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { buildValidationPipe } from './../src/validation-pipe';
@@ -18,7 +20,11 @@ import {
   PRECEDENT_PROVIDER,
 } from './../src/safeguard/precedent-provider';
 import { SAFEGUARD_STORE } from './../src/safeguard/storage/safeguard-store';
-import { SqliteSafeguardStore } from './../src/safeguard/storage/sqlite-safeguard-store';
+import { PostgresSafeguardStore } from './../src/safeguard/storage/postgres-safeguard-store';
+import { openTestDatabase } from './postgres-test-db';
+import { ActionsModule } from '../src/actions/actions.module';
+import { ChatsModule } from '../src/chats/chats.module';
+import { ChatLlmService } from '../src/chats/chat-llm.service';
 import { SafeguardAnalysisService } from './../src/safeguard/safeguard-analysis.service';
 import { AnalysesService } from './../src/safeguard/analyses.service';
 import { ReportPdfService } from './../src/safeguard/report-pdf.service';
@@ -57,10 +63,19 @@ const STUB_RESULT = {
 
 describe('Safeguard API (e2e)', () => {
   let app: INestApplication<App>;
-  let store: SqliteSafeguardStore;
+  let close: (() => Promise<void>) | undefined;
 
   beforeAll(async () => {
-    store = new SqliteSafeguardStore(':memory:');
+    const opened = await openTestDatabase();
+    close = opened.close;
+    const store = new PostgresSafeguardStore(opened.db);
+
+    @Global()
+    @Module({
+      providers: [{ provide: DataSource, useValue: opened.db }],
+      exports: [DataSource],
+    })
+    class TestDatabaseModule {}
 
     @Module({
       providers: [
@@ -81,10 +96,23 @@ describe('Safeguard API (e2e)', () => {
     class OutsideModule {}
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [SafeguardModule, OutsideModule],
+      imports: [
+        ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
+        TestDatabaseModule,
+        SafeguardModule,
+        OutsideModule,
+        ActionsModule,
+        ChatsModule,
+      ],
     })
       .overrideModule(SafeguardInfraModule)
       .useModule(TestInfraModule)
+      .overrideProvider(ChatLlmService)
+      .useValue({
+        reply: jest
+          .fn()
+          .mockResolvedValue({ reply: '테스트 상담 답변', isCrisis: false }),
+      })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -105,7 +133,11 @@ describe('Safeguard API (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    try {
+      await app?.close();
+    } finally {
+      await close?.();
+    }
   });
 
   it('GET / — UI 페이지를 서빙한다', () => {
@@ -273,6 +305,30 @@ describe('Safeguard API (e2e)', () => {
         patterns: ['셔틀'],
       });
 
+      const cards = await request(app.getHttpServer())
+        .get(`/api/analyses/${analysisId}/actions`)
+        .expect(200);
+      expect(
+        (cards.body as { actions: { id: string }[] }).actions.map((a) => a.id),
+      ).toEqual(result.actionIds);
+
+      const intro = await request(app.getHttpServer())
+        .post('/api/chats/intro')
+        .send({ analysisId })
+        .expect(200);
+      const chatId = (intro.body as { sessionId: string }).sessionId;
+      expect(chatId).toMatch(/^[a-f0-9-]{36}$/);
+      await request(app.getHttpServer())
+        .post('/api/chats/messages')
+        .send({ sessionId: chatId, userMessage: '친구 때문에 속상해요' })
+        .expect(200)
+        .expect({
+          reply: '테스트 상담 답변',
+          isCrisis: false,
+          emergencyContacts: null,
+          fallback: false,
+        });
+
       const conflict = await request(app.getHttpServer())
         .delete(`/api/sessions/${sessionId}`)
         .expect(409);
@@ -302,6 +358,16 @@ describe('Safeguard API (e2e)', () => {
       await request(app.getHttpServer())
         .delete(`/api/analyses/${analysisId}`)
         .expect(204);
+      await request(app.getHttpServer())
+        .delete(`/api/analyses/${analysisId}`)
+        .expect(404);
+      await request(app.getHttpServer())
+        .post('/api/chats/messages')
+        .send({ sessionId: chatId, userMessage: '삭제 후 요청' })
+        .expect(404);
+      await request(app.getHttpServer())
+        .get(`/api/analyses/${analysisId}/actions`)
+        .expect(404);
       await request(app.getHttpServer())
         .get(`/api/analyses/${analysisId}`)
         .expect(404);

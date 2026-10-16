@@ -16,6 +16,7 @@
  *     성폭법 14조의2, 민법 751조, 형법 350조 — 8건 전부 성공
  */
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 
 const BASE = 'http://www.law.go.kr/DRF';
 
@@ -154,9 +155,8 @@ export class LawApiService {
   private readonly oc: string;
   private readonly mstCache = new Map<string, string>();
 
-  constructor() {
-    // .env 의 API_KEY 를 OC 파라미터로 사용 (main.ts 의 loadEnv 가 채움)
-    this.oc = process.env.API_KEY ?? 'test';
+  constructor(config: ConfigService = new ConfigService()) {
+    this.oc = config.get<string>('API_KEY', 'test');
   }
 
   private async fetchJson(path: string, params: Record<string, string>) {

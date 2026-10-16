@@ -4,7 +4,7 @@
  * 계약(precedent-provider.ts)과 검색 모듈 사이에서 맞추는 것:
  *   - 검색 모듈은 호출당 구간 10개 · targetText 5000자까지 받는다 → 나눠 호출하고 자른다.
  *   - 검색 모듈은 targetMessageId 를 받지 않는다 → 응답이 입력 순서를 지키므로 순서로 맞춘다.
- *   - 우리는 사건번호를 판례 ID로 쓴다 → 사건번호 없는 판례는 뺀다.
+ *   - 판례 ID는 상세 조회 API와 같은 일련번호를 쓴다. 사건번호는 요지에 표시한다.
  *   - 검색 응답의 searchSummary·factPattern 은 AI가 쓴 문장이다. 2차 판단에 들어가는 요지는
  *     판례 API 원문이어야 하므로(지어낸 요지는 판단 전체를 오염시킨다) 저장된 판시사항·판결요지
  *     원문에서 사전을 만든다. 원문을 못 구한 판례는 뺀다.
@@ -76,9 +76,9 @@ export class VectorPrecedentProvider implements PrecedentProvider {
       const ids: string[] = [];
       for (const m of hits[i]) {
         const entry = lines.get(m.precedentId);
-        if (!entry || ids.includes(entry.caseNumber)) continue;
-        ids.push(entry.caseNumber);
-        precedentDict[entry.caseNumber] ??= entry.line;
+        if (!entry || ids.includes(m.precedentId)) continue;
+        ids.push(m.precedentId);
+        precedentDict[m.precedentId] ??= entry.line;
       }
       return { ...t, matchedPrecedentIds: ids };
     });

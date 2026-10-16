@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { SafeguardController } from './safeguard.controller';
 import { SessionsController } from './sessions.controller';
 import { AnalysesController } from './analyses.controller';
@@ -10,7 +11,7 @@ import { SafeguardInfraModule } from './safeguard-infra.module';
 
 @Module({
   // 저장소·판례 매칭 구현은 인프라 모듈이 정한다 — 여기는 토큰으로만 주입받는다
-  imports: [SafeguardInfraModule],
+  imports: [ConfigModule, SafeguardInfraModule],
   controllers: [SafeguardController, SessionsController, AnalysesController],
   providers: [
     SafeguardAnalysisService,

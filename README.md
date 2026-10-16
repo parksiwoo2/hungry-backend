@@ -1,98 +1,71 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+# HTTP API 목록
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+## 인증·사용자
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+| 메서드 | 경로           | 설명                               |
+| ------ | -------------- | ---------------------------------- |
+| POST   | `/auth/signup` | 이메일과 닉네임으로 회원가입       |
+| POST   | `/auth/login`  | 이메일로 로그인하고 세션 쿠키 발급 |
+| POST   | `/auth/logout` | 현재 로그인 세션 종료              |
+| GET    | `/users/me`    | 내 정보 조회                       |
+| PATCH  | `/users/me`    | 내 정보 부분 수정                  |
+| DELETE | `/users/me`    | 회원탈퇴 및 로그인 세션 삭제       |
 
-## Description
+## 판례
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+| 메서드 | 경로                           | 설명                                              |
+| ------ | ------------------------------ | ------------------------------------------------- |
+| GET    | `/precedent`                   | 외부 API에서 판례 목록 조회                       |
+| GET    | `/precedent/:id`               | 외부 API에서 판례 상세 조회                       |
+| GET    | `/precedent/stored/categories` | 판례 수집 분류와 검색어 목록 조회                 |
+| GET    | `/precedent/stored`            | DB에 저장된 판례 목록 조회                        |
+| GET    | `/precedent/stored/:id`        | DB에 저장된 판례 상세 조회                        |
+| POST   | `/precedent/search`            | 자연어·키워드 하이브리드 판례 검색                |
+| POST   | `/precedent/match`             | 증거 내용과 법적 맥락으로 관련 판례 최대 3개 매칭 |
+| GET    | `/precedent/models/:model`     | 판례 관련 모델별 저장 데이터 조회                 |
 
-## Project setup
+## 대화 자료
 
-```bash
-$ npm install
-```
+| 메서드 | 경로                       | 설명                                       |
+| ------ | -------------------------- | ------------------------------------------ |
+| POST   | `/api/sessions`            | 카카오톡 내보내기 원문 업로드·파싱         |
+| GET    | `/api/sessions/:sessionId` | 업로드 자료의 참여자·기간 등 메타정보 조회 |
+| DELETE | `/api/sessions/:sessionId` | 업로드 자료 삭제                           |
 
-## Compile and run the project
+## 분석·보고서·행동 카드
 
-```bash
-# development
-$ npm run start
+| 메서드 | 경로                                | 설명                                         |
+| ------ | ----------------------------------- | -------------------------------------------- |
+| POST   | `/api/analyses`                     | 대화 AI 분석 실행 및 진행 상황·결과 스트리밍 |
+| GET    | `/api/analyses`                     | 저장된 분석 목록 조회                        |
+| GET    | `/api/analyses/:analysisId`         | 분석 상태와 상세 결과 조회                   |
+| DELETE | `/api/analyses/:analysisId`         | 분석 삭제                                    |
+| GET    | `/api/analyses/:analysisId/report`  | 분석 결과 PDF 다운로드                       |
+| GET    | `/api/analyses/:analysisId/actions` | 분석 결과에 맞는 행동 카드 조회              |
 
-# watch mode
-$ npm run start:dev
+## 상담 챗봇
 
-# production mode
-$ npm run start:prod
-```
+| 메서드 | 경로                  | 설명                                      |
+| ------ | --------------------- | ----------------------------------------- |
+| POST   | `/api/chats/intro`    | 분석 결과로 상담 세션 생성 및 인사말 반환 |
+| POST   | `/api/chats/messages` | 상담 메시지 전송 및 AI 답변 반환          |
 
-## Run tests
+## 테스트 화면
 
-```bash
-# unit tests
-$ npm run test
+| 메서드 | 경로 | 설명                  |
+| ------ | ---- | --------------------- |
+| GET    | `/`  | 테스트용 웹 화면 제공 |
 
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
-```
-
-## Deployment
-
-When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
-
-If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
-
-```bash
-$ npm install -g @nestjs/mau
-$ mau deploy
-```
-
-With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
-
-## Resources
-
-Check out a few resources that may come in handy when working with NestJS:
-
-- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
-- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
-- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
-- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
-- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
-- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
-- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
-- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
-
-## Support
-
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
-
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
+| POST | `/precedent/search` | 자연어·키워드 하이브리드 판례 검색 |
+| GET | `/precedent/:id` | 외부 API에서 판례 상세 조회
+| POST | `/api/analyses` | 대화 AI 분석 실행 및 진행 상황·결과 스트리밍 |
+| GET | `/api/analyses` | 저장된 분석 목록 조회 |
+| GET | `/api/analyses/:analysisId` | 분석 상태와 상세 결과 조회 |
+| DELETE | `/api/analyses/:analysisId` | 분석 삭제 |
+| GET | `/api/analyses/:analysisId/report` | 분석 결과 PDF 다운로드 |
+| GET | `/api/analyses/:analysisId/actions` | 분석 결과에 맞는 행동 카드 조회  
+| POST | `/api/sessions` | 카카오톡 내보내기 원문 업로드·파싱 |
+| GET | `/api/sessions/:sessionId` | 업로드 자료의 참여자·기간 등 메타정보 조회 |
+| DELETE | `/api/sessions/:sessionId` | 업로드 자료 삭제 |
+| POST | `/api/chats/intro` | 분석 결과로 상담 세션 생성 및 인사말 반환 |
+| POST | `/api/chats/messages` | 상담 메시지 전송 및 AI 답변 반환 |
