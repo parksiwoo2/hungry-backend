@@ -1,8 +1,8 @@
 /**
  * AI 심리 상담 챗봇 — 분석 결과를 맥락으로 주입해 대화하고, 위기 발화를 감지한다.
  *
- *   POST /api/chats/intro     분석으로 세션을 만들고 첫 인사말을 돌려준다
- *   POST /api/chats/messages  사용자 메시지에 답하고, 위기면 세션을 닫고 긴급 연락처를 준다
+ *   POST /chats/intro     분석으로 세션을 만들고 첫 인사말을 돌려준다
+ *   POST /chats/messages  사용자 메시지에 답하고, 위기면 세션을 닫고 긴급 연락처를 준다
  *
  * 저장은 Postgres(chat_sessions · chat_messages). 이력은 서버가 들고 있어서
  * 클라이언트는 sessionId 만 넘긴다. 분석 결과는 AnalysesService 로 읽는다(저장소를 직접 만지지 않는다).

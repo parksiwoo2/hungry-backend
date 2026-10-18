@@ -120,9 +120,9 @@
 "use strict";
 /* ─────────────────────────────────────────────────────────────
    챗봇 테스트 페이지 (임시) — /chat-test.html[?analysisId=ana_…]
-   · GET  /api/analyses?limit=      완료된 분석 목록 (선택용)
-   · POST /api/chats/intro          { analysisId } → { sessionId, greeting }
-   · POST /api/chats/messages       { sessionId, userMessage } → { reply, isCrisis, emergencyContacts, fallback }
+   · GET  /analyses?limit=      완료된 분석 목록 (선택용)
+   · POST /chats/intro          { analysisId } → { sessionId, greeting }
+   · POST /chats/messages       { sessionId, userMessage } → { reply, isCrisis, emergencyContacts, fallback }
    · 위기(isCrisis) 또는 409(위기로 종료된 세션)면 입력을 잠그고 긴급 연락처를 보여 준다
    · 메시지는 textContent 로만 넣는다 (모델 출력을 HTML 로 해석하지 않는다)
    ───────────────────────────────────────────────────────────── */
@@ -161,7 +161,7 @@ async function api(path, body) {
 async function loadAnalyses() {
   const sel = $("pick");
   try {
-    const { analyses } = await api("/api/analyses?limit=30");
+    const { analyses } = await api("/analyses?limit=30");
     const done = analyses.filter((a) => a.status === "done");
     sel.innerHTML = '<option value="">직접 입력</option>';
     for (const a of done) {
@@ -195,7 +195,7 @@ $("startForm").addEventListener("submit", async (e) => {
   $("btnStart").disabled = true;
   $("btnStart").textContent = "인사말을 만드는 중…";
   try {
-    const data = await api("/api/chats/intro", { analysisId });
+    const data = await api("/chats/intro", { analysisId });
     sessionId = data.sessionId;
     $("meta").textContent = "분석 " + analysisId + " · 세션 " + data.sessionId;
     show("chat");
@@ -284,7 +284,7 @@ const RETRY_DELAY_MS = Number(new URLSearchParams(location.search).get("retryDel
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 async function sendWithRetry(text, onRetry) {
-  const send = () => api("/api/chats/messages", { sessionId, userMessage: text });
+  const send = () => api("/chats/messages", { sessionId, userMessage: text });
   let data = await send();
   for (let n = 1; data.fallback && n <= MAX_RETRIES; n++) {
     onRetry(n);

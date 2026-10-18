@@ -87,7 +87,7 @@ export interface AnalysisListItemResponse {
   patterns: string[];
 }
 
-/** GET /api/analyses — 노션 명세대로 배열을 analyses 키로 감싼다 */
+/** GET /analyses — 노션 명세대로 배열을 analyses 키로 감싼다 */
 export interface AnalysisListResponse {
   analyses: AnalysisListItemResponse[];
 }

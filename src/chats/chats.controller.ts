@@ -6,7 +6,7 @@ import {
 } from './chats.service';
 import { SendMessageDto, StartChatDto } from './dto/chat.dto';
 
-@Controller('api/chats')
+@Controller('chats')
 export class ChatsController {
   constructor(private readonly chatsService: ChatsService) {}
 
