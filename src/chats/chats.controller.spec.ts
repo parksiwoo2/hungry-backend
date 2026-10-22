@@ -38,29 +38,29 @@ describe('ChatsController', () => {
     service.sendMessage.mockReset();
   });
 
-  it('POST /api/chats/intro — 200 과 인사말', async () => {
+  it('POST /chats/intro — 200 과 인사말', async () => {
     service.intro.mockResolvedValue({
       sessionId: SESSION_ID,
       greeting: '안녕',
     });
 
     await request(app.getHttpServer())
-      .post('/api/chats/intro')
+      .post('/chats/intro')
       .send({ analysisId: 'ana_1' })
       .expect(200)
       .expect({ sessionId: SESSION_ID, greeting: '안녕' });
     expect(service.intro).toHaveBeenCalledWith('ana_1');
   });
 
-  it('POST /api/chats/intro — analysisId 가 없으면 400', async () => {
+  it('POST /chats/intro — analysisId 가 없으면 400', async () => {
     await request(app.getHttpServer())
-      .post('/api/chats/intro')
+      .post('/chats/intro')
       .send({})
       .expect(400);
     expect(service.intro).not.toHaveBeenCalled();
   });
 
-  it('POST /api/chats/messages — 200, 메시지는 앞뒤 공백을 자른다', async () => {
+  it('POST /chats/messages — 200, 메시지는 앞뒤 공백을 자른다', async () => {
     service.sendMessage.mockResolvedValue({
       reply: '네',
       isCrisis: false,
@@ -68,7 +68,7 @@ describe('ChatsController', () => {
     });
 
     await request(app.getHttpServer())
-      .post('/api/chats/messages')
+      .post('/chats/messages')
       .send({ sessionId: SESSION_ID, userMessage: '  불안해요  ' })
       .expect(200);
     expect(service.sendMessage).toHaveBeenCalledWith(SESSION_ID, '불안해요');
@@ -85,9 +85,9 @@ describe('ChatsController', () => {
       '정의되지 않은 필드',
       { sessionId: SESSION_ID, userMessage: '안녕', chatHistory: [] },
     ],
-  ])('POST /api/chats/messages — %s 은 400', async (_name, body) => {
+  ])('POST /chats/messages — %s 은 400', async (_name, body) => {
     await request(app.getHttpServer())
-      .post('/api/chats/messages')
+      .post('/chats/messages')
       .send(body)
       .expect(400);
     expect(service.sendMessage).not.toHaveBeenCalled();

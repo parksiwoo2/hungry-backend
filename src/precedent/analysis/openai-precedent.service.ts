@@ -120,11 +120,11 @@ export class OpenAiPrecedentService {
       return this.client;
     }
 
-    const apiKey = this.configService.get<string>('SECRET_KEY');
+    const apiKey = this.configService.get<string>('SECRET_KEY_SEARCH');
 
     if (!apiKey) {
       throw new InternalServerErrorException(
-        'SECRET_KEY 환경 변수가 설정되지 않았습니다.',
+        'SECRET_KEY_SEARCH 환경 변수가 설정되지 않았습니다.',
       );
     }
 

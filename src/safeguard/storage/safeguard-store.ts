@@ -2,9 +2,9 @@
  * 저장소 계약 — 세션(업로드 자료) · 분석 · 의심 구간(utterance).
  *
  * 팀 데이터 모델(analysis > session > utterance)을 그대로 따른다.
- * 운영 구현은 Postgres(postgres-safeguard-store.ts), 테스트 구현은 SQLite(sqlite-safeguard-store.ts).
+ * 운영과 통합 테스트 모두 Postgres(postgres-safeguard-store.ts)를 사용한다.
  * 어느 것을 쓸지는 SAFEGUARD_STORE 프로바이더(safeguard-infra.module.ts)가 정한다.
- * 두 구현은 같은 계약 테스트(safeguard-store.spec.ts)를 통과해야 한다.
+ * 실제 DB 동작은 test/postgres-store.e2e-spec.ts에서 검증한다.
  */
 import { randomUUID } from 'crypto';
 import type {

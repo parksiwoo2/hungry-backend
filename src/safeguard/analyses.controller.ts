@@ -1,9 +1,9 @@
 /**
- *   POST   /api/analyses                      분석 실행 — 진행 단계를 ndjson으로 스트리밍, 마지막 줄이 결과
- *   GET    /api/analyses?limit=&offset=       내 분석 목록 (최신순)
- *   GET    /api/analyses/:analysisId          분석 결과 (의심 구간·패턴·집계·판례)
- *   DELETE /api/analyses/:analysisId          분석 삭제
- *   GET    /api/analyses/:analysisId/report   정리 문서 PDF (?legal=false 면 법조 없이 사실만)
+ *   POST   /analyses                      분석 실행 — 진행 단계를 ndjson으로 스트리밍, 마지막 줄이 결과
+ *   GET    /analyses?limit=&offset=       내 분석 목록 (최신순)
+ *   GET    /analyses/:analysisId          분석 결과 (의심 구간·패턴·집계·판례)
+ *   DELETE /analyses/:analysisId          분석 삭제
+ *   GET    /analyses/:analysisId/report   정리 문서 PDF (?legal=false 면 법조 없이 사실만)
  */
 import {
   Body,
@@ -26,7 +26,7 @@ function toInt(v: string | undefined, fallback: number, max: number): number {
   return Math.min(n, max);
 }
 
-@Controller('api/analyses')
+@Controller('analyses')
 export class AnalysesController {
   constructor(private readonly analyses: AnalysesService) {}
 

@@ -24,8 +24,8 @@ import { ChatSession } from './entities/chat-session.entity';
       // [임시] CHAT_LLM=gemini 일 때만 Gemini 구현(chat-llm.gemini.temp.ts). 기본은 Claude
       useFactory: (config: ConfigService): ChatLlmService =>
         config.get<string>('CHAT_LLM') === 'gemini'
-          ? new ChatGeminiLlmService()
-          : new ChatLlmService(),
+          ? new ChatGeminiLlmService(config)
+          : new ChatLlmService(config),
     },
   ],
 })

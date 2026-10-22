@@ -3,7 +3,6 @@ import {
   IsDefined,
   IsEmail,
   IsEnum,
-  IsOptional,
   IsString,
   Length,
   MaxLength,
@@ -30,7 +29,7 @@ export class SignupDto extends LoginDto {
 }
 
 export class UpdateUserDto {
-  @IsOptional()
+  @ValidateIf((_input: UpdateUserDto, value: unknown) => value !== undefined)
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim().toLowerCase() : value,
   )
@@ -38,7 +37,7 @@ export class UpdateUserDto {
   @MaxLength(254, { message: 'email은 254자 이하여야 합니다.' })
   email?: string;
 
-  @IsOptional()
+  @ValidateIf((_input: UpdateUserDto, value: unknown) => value !== undefined)
   @Transform(({ value }: { value: unknown }) =>
     typeof value === 'string' ? value.trim().normalize('NFC') : value,
   )
@@ -46,7 +45,7 @@ export class UpdateUserDto {
   @Length(1, 30, { message: 'nickName은 1~30자여야 합니다.' })
   nickName?: string;
 
-  @IsOptional()
+  @ValidateIf((_input: UpdateUserDto, value: unknown) => value !== undefined)
   @IsEnum(MaskingIcon, {
     message: 'maskingIcon은 NONE, NOTE, CALCU 중 하나여야 합니다.',
   })

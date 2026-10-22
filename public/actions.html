@@ -59,7 +59,7 @@
 "use strict";
 /* ─────────────────────────────────────────────────────────────
    행동 제시 페이지 — /actions.html?analysisId=ana_…
-   · GET /api/analyses/{id}/actions — 카드는 서버가 priority 순으로 내려준다
+   · GET /analyses/{id}/actions — 카드는 서버가 priority 순으로 내려준다
    · 카드가 0장이어도 숨기지 않고 "0장 / 해당 없음"으로 그대로 보여준다
    · 분석 결과 화면: /safeguard-ui-temp.html?analysisId=ana_…
    ───────────────────────────────────────────────────────────── */
@@ -128,7 +128,7 @@ function render(list, err) {
 async function load() {
   render(null);
   try {
-    const res = await fetch("/api/analyses/" + encodeURIComponent(id) + "/actions");
+    const res = await fetch("/analyses/" + encodeURIComponent(id) + "/actions");
     const data = await res.json().catch(() => ({}));
     if (res.status === 404) throw new Error("해당 분석을 찾을 수 없어요");
     if (!res.ok) throw new Error(data.message || "행동 가이드를 불러오지 못했어요 (" + res.status + ")");

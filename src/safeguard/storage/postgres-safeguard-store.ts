@@ -136,7 +136,7 @@ export class PostgresSafeguardStore implements SafeguardStore {
 
   async deleteSession(id: string): Promise<boolean> {
     const rows = await this.db.query<{ id: string }[]>(
-      'DELETE FROM safeguard_sessions WHERE id = $1 RETURNING id',
+      'WITH deleted AS (DELETE FROM safeguard_sessions WHERE id = $1 RETURNING id) SELECT id FROM deleted',
       [id],
     );
     return rows.length > 0;
@@ -288,7 +288,7 @@ export class PostgresSafeguardStore implements SafeguardStore {
 
   async deleteAnalysis(id: string): Promise<boolean> {
     const rows = await this.db.query<{ id: string }[]>(
-      'DELETE FROM safeguard_analyses WHERE id = $1 RETURNING id',
+      'WITH deleted AS (DELETE FROM safeguard_analyses WHERE id = $1 RETURNING id) SELECT id FROM deleted',
       [id],
     );
     return rows.length > 0;

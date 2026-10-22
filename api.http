@@ -1,0 +1,95 @@
+# VS Code REST Client에서 각 요청의 Send Request로 실행합니다.
+# 실행 순서: 업로드 → 분석 → 분석 ID 입력 → 조회/PDF/행동 카드/상담 → 삭제
+# 검색·분석·상담은 실제 외부 AI를 호출할 수 있습니다.
+@baseUrl = http://localhost:3000
+@precedentId = 228541
+# 4번 분석 스트림의 마지막 result 또는 error에 있는 analysisId로 바꾸세요.
+@analysisId = ana_REPLACE_WITH_ANALYSIS_ID
+# 업로드 세션 ID와 상담 세션 ID는 서로 다릅니다.
+@uploadSessionId = {{uploadSession.response.body.$.sessionId}}
+@chatSessionId = {{startChat.response.body.$.sessionId}}
+
+### 1. 자연어·키워드 하이브리드 검색 (201)
+# 검색어를 임베딩하므로 OpenAI 연결이 필요합니다. 다음 페이지는 offset을 10씩 늘립니다.
+POST {{baseUrl}}/precedent/search
+Content-Type: application/json
+
+{
+  "query": "카카오톡 단체 대화방에서 친구를 모욕한 발언의 공연성이 인정된 판례",
+  "limit": 10,
+  "offset": 0
+}
+
+### 2. 외부 API 판례 상세 조회 (200)
+# precedentId는 사건번호가 아닌 국가법령정보센터 판례 일련번호입니다.
+GET {{baseUrl}}/precedent/{{precedentId}}
+
+### 3. 카카오톡 내보내기 원문 업로드·파싱 (201)
+# @name uploadSession
+POST {{baseUrl}}/sessions
+Content-Type: application/json
+
+{
+  "source": "kakao_export",
+  "rawText": "2학년 3반 단톡 님과 카카오톡 대화\n저장한 날짜 : 2026-03-20 21:14:03\n\n--------------- 2026년 3월 4일 수요일 ---------------\n[민준] [오후 7:12] 야 윤아 빵 사와라\n[지호] [오후 7:13] ㅋㅋㅋ\n[윤아] [오후 7:14] 싫어\n[민준] [오후 7:15] 안사오면 어떻게 되는지 알지"
+}
+
+### 4. 대화 AI 분석 및 NDJSON 스트리밍 (201)
+# context: dm | small_group | large_group | public
+# 현재 sessionIds는 1개만 지원합니다. victimName은 업로드 자료의 참여자 이름입니다.
+# 응답은 줄마다 별도 JSON입니다. 마지막 type이 result인지 error인지 확인하세요.
+# 응답의 analysisId를 파일 상단 @analysisId에 직접 넣으세요.
+POST {{baseUrl}}/analyses
+Content-Type: application/json
+Accept: application/x-ndjson
+
+{
+  "sessionIds": ["{{uploadSessionId}}"],
+  "context": "small_group",
+  "victimName": "윤아"
+}
+
+### 5. 저장된 분석 목록 조회 (200)
+GET {{baseUrl}}/analyses?limit=20&offset=0
+
+### 6. 분석 상태·상세 결과 조회 (200)
+GET {{baseUrl}}/analyses/{{analysisId}}
+
+### 7. 분석 결과 PDF 다운로드 (200)
+# legal=false이면 법조·판례 안내를 제외한 사실 정리 문서입니다.
+# 분석이 완료되지 않았으면 409입니다. 응답을 PDF 파일로 저장해 확인하세요.
+GET {{baseUrl}}/analyses/{{analysisId}}/report?legal=true
+Accept: application/pdf
+
+### 8. 분석 결과에 맞는 행동 카드 조회 (200)
+GET {{baseUrl}}/analyses/{{analysisId}}/actions
+
+### 9. 업로드 자료의 참여자·기간·분석 ID 조회 (200)
+GET {{baseUrl}}/sessions/{{uploadSessionId}}
+
+### 10. 완료된 분석으로 상담 세션 생성 및 인사말 반환 (200)
+# @name startChat
+POST {{baseUrl}}/chats/intro
+Content-Type: application/json
+
+{
+  "analysisId": "{{analysisId}}"
+}
+
+### 11. 상담 메시지 전송 및 AI 답변 반환 (200)
+# fallback=true이면 AI 연결 실패로 고정 안내 문구가 반환된 것입니다.
+POST {{baseUrl}}/chats/messages
+Content-Type: application/json
+
+{
+  "sessionId": "{{chatSessionId}}",
+  "userMessage": "단톡방에서 친구들이 계속 심부름을 시키고 위협해요. 어떻게 대응하면 좋을까요?"
+}
+
+### 12. 분석 삭제 (204)
+# 해당 분석의 상담 세션·상담 메시지도 함께 삭제됩니다.
+DELETE {{baseUrl}}/analyses/{{analysisId}}
+
+### 13. 업로드 자료 삭제 (204)
+# 자료를 사용하는 분석을 먼저 모두 삭제해야 합니다. 남아 있으면 409입니다.
+DELETE {{baseUrl}}/sessions/{{uploadSessionId}}

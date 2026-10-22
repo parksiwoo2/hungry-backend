@@ -7,7 +7,10 @@ import {
 import * as path from 'path';
 import * as fs from 'fs';
 import { Action } from './interfaces/action.interface';
-import { AnalysesService, AnalysisResponse } from '../safeguard/analyses.service';
+import {
+  AnalysesService,
+  AnalysisResponse,
+} from '../safeguard/analyses.service';
 
 @Injectable()
 export class ActionsService implements OnModuleInit {
@@ -18,7 +21,7 @@ export class ActionsService implements OnModuleInit {
   onModuleInit(): void {
     const filePath = path.join(__dirname, 'action_mapping.json');
     const raw = fs.readFileSync(filePath, 'utf-8');
-    const data: { mapped_actions: Action[] } = JSON.parse(raw);
+    const data = JSON.parse(raw) as { mapped_actions: Action[] };
 
     for (const action of data.mapped_actions) {
       this.actionMap.set(action.id, action);
@@ -29,16 +32,18 @@ export class ActionsService implements OnModuleInit {
    * analysisId로 DB에서 2차 분석 결과를 조회한 뒤,
    * actionIds를 추출하여 카드로 매핑한다.
    */
-  async mapActionsByAnalysis(analysisId: string): Promise<{ actions: Action[] }> {
+  async mapActionsByAnalysis(
+    analysisId: string,
+  ): Promise<{ actions: Action[] }> {
     let analysis: AnalysisResponse;
     try {
       analysis = await this.analysesService.get(analysisId);
-    } catch (err: any) {
+    } catch (err) {
       if (err instanceof NotFoundException) {
         throw err;
       }
       throw new InternalServerErrorException(
-        `Failed to get analysis: ${err?.message ?? 'unknown error'}`,
+        `Failed to get analysis: ${err instanceof Error ? err.message : 'unknown error'}`,
       );
     }
 

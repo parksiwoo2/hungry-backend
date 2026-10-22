@@ -69,7 +69,7 @@ function fakes(
 }
 
 describe('VectorPrecedentProvider — 팀 판례 검색을 우리 계약으로 변환', () => {
-  it('사건번호만 뽑아 붙이고, 사전의 요지는 AI 요약이 아니라 판시사항 원문에서 만든다', async () => {
+  it('일련번호를 ID로 유지하고 사건번호와 판시사항은 표시 문구에 넣는다', async () => {
     const { provider } = fakes(
       () => [hit('100', '2003도709'), hit('200', '2006도546')],
       {
@@ -84,11 +84,11 @@ describe('VectorPrecedentProvider — 팀 판례 검색을 우리 계약으로 �
     const out = await provider.match({ analysisTargets: [target('32,34')] });
 
     expect(out.analysisTargets).toEqual([
-      { ...target('32,34'), matchedPrecedentIds: ['2003도709', '2006도546'] },
+      { ...target('32,34'), matchedPrecedentIds: ['100', '200'] },
     ]);
     expect(out.precedentDict).toEqual({
-      '2003도709': '대법원 2003도709: 공갈죄의 수단으로서 협박의 의미',
-      '2006도546': '대법원 2006도546: 판결요지 원문',
+      '100': '대법원 2003도709: 공갈죄의 수단으로서 협박의 의미',
+      '200': '대법원 2006도546: 판결요지 원문',
     });
   });
 
@@ -108,16 +108,18 @@ describe('VectorPrecedentProvider — 팀 판례 검색을 우리 계약으로 �
 
     const out = await provider.match({ analysisTargets: [target('1')] });
 
-    expect(out.analysisTargets[0].matchedPrecedentIds).toEqual(['2020도5813']);
-    expect(Object.keys(out.precedentDict)).toEqual(['2020도5813']);
+    expect(out.analysisTargets[0].matchedPrecedentIds).toEqual(['4']);
+    expect(Object.keys(out.precedentDict)).toEqual(['4']);
   });
 
   it('구간이 10개를 넘으면 나눠 호출하고 입력 순서를 지킨다', async () => {
     const targets = Array.from({ length: 23 }, (_, i) => target(String(i + 1)));
     const { provider, requests } = fakes(
-      (text) => [hit(text, `2000도${text.replace('구간 ', '')}`)],
+      (text) => [
+        hit(text.replace('구간 ', ''), `2000도${text.replace('구간 ', '')}`),
+      ],
       Object.fromEntries(
-        targets.map((t) => [t.targetText, stored({ summary: '요지' })]),
+        targets.map((t) => [t.targetMessageId, stored({ summary: '요지' })]),
       ),
     );
 
@@ -127,7 +129,7 @@ describe('VectorPrecedentProvider — 팀 판례 검색을 우리 계약으로 �
     expect(out.analysisTargets.map((t) => t.targetMessageId)).toEqual(
       targets.map((t) => t.targetMessageId),
     );
-    expect(out.analysisTargets[22].matchedPrecedentIds).toEqual(['2000도23']);
+    expect(out.analysisTargets[22].matchedPrecedentIds).toEqual(['23']);
   });
 
   it('검색 모듈의 입력 제한에 맞춘다 — 5000자 초과는 자르고 targetMessageId 는 보내지 않는다', async () => {

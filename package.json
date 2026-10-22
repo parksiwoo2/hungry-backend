@@ -21,7 +21,8 @@
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",
-    "test:e2e": "jest --config ./test/jest-e2e.json"
+    "test:e2e": "jest --config ./test/jest-e2e.json --runInBand",
+    "test:postgres": "docker compose --env-file test/postgres.env -f compose.test.yaml up -d --wait && npm run test:e2e"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.116.0",
@@ -31,7 +32,6 @@
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/typeorm": "^11.0.3",
-    "better-sqlite3": "^12.11.1",
     "class-transformer": "^0.5.1",
     "class-validator": "^0.15.1",
     "openai": "^7.4.0",
@@ -48,7 +48,6 @@
     "@nestjs/cli": "^11.0.0",
     "@nestjs/schematics": "^11.0.0",
     "@nestjs/testing": "^11.0.1",
-    "@types/better-sqlite3": "^9.6.0",
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^24.0.0",

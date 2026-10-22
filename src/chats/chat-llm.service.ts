@@ -3,6 +3,7 @@
  * 안전분석 엔진(safeguard-analysis.service.ts)과 같은 SDK·키(ANTHROPIC_API_KEY)를 쓴다.
  */
 import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import Anthropic from '@anthropic-ai/sdk';
 import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod';
 import { z } from 'zod';
@@ -21,16 +22,24 @@ export type ChatReply = z.infer<typeof ReplySchema>;
 
 @Injectable()
 export class ChatLlmService {
+  constructor(protected readonly config: ConfigService = new ConfigService()) {}
+
   /** 지연 초기화 — 부팅·테스트 시 API 키가 없어도 모듈이 뜬다 */
   private _client?: Anthropic;
   private get client(): Anthropic {
     // 상담은 사용자가 기다리는 요청이다 — 오래 붙들지 않고 폴백으로 넘긴다
-    return (this._client ??= new Anthropic({ timeout: 30_000, maxRetries: 1 }));
+    return (this._client ??= new Anthropic({
+      apiKey:
+        this.config.get<string>('ANTHROPIC_API_KEY') ||
+        this.config.get<string>('CLAUDE_AI_API_KEY'),
+      timeout: 30_000,
+      maxRetries: 1,
+    }));
   }
 
   async reply(system: string, messages: LlmMessage[]): Promise<ChatReply> {
     const response = await this.client.messages.create({
-      model: process.env.CHAT_MODEL || DEFAULT_MODEL,
+      model: this.config.get<string>('CHAT_MODEL') || DEFAULT_MODEL,
       max_tokens: 2048,
       system,
       messages,

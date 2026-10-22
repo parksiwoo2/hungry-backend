@@ -1,13 +1,15 @@
 /**
  * 세션 → 분석 → 조회 → PDF 전체 흐름. AI 엔진(analyze)만 스텁으로 바꾸고
- * 저장소는 메모리 SQLite, PDF 생성기는 스텁(실제 PDF는 서버 수동 E2E로 확인).
+ * 저장소는 PostgreSQL 임시 스키마, PDF 생성기는 스텁이다.
  *
  * AppModule 이 아니라 SafeguardModule 만 올린다 — AppModule 은 Postgres 연결이 있어야 뜬다.
  * 운영 인프라(Postgres 저장소 · 판례 벡터 검색)는 SafeguardInfraModule 한곳에 모여 있어
  * 그 모듈만 테스트용으로 갈아 끼우면 DB·외부 API 없이 라우트·검증·저장 흐름을 본다.
  */
 import { Test, TestingModule } from '@nestjs/testing';
-import { Injectable, INestApplication, Module } from '@nestjs/common';
+import { Global, Injectable, INestApplication, Module } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
+import { DataSource } from 'typeorm';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { buildValidationPipe } from './../src/validation-pipe';
@@ -18,7 +20,11 @@ import {
   PRECEDENT_PROVIDER,
 } from './../src/safeguard/precedent-provider';
 import { SAFEGUARD_STORE } from './../src/safeguard/storage/safeguard-store';
-import { SqliteSafeguardStore } from './../src/safeguard/storage/sqlite-safeguard-store';
+import { PostgresSafeguardStore } from './../src/safeguard/storage/postgres-safeguard-store';
+import { openTestDatabase } from './postgres-test-db';
+import { ActionsModule } from '../src/actions/actions.module';
+import { ChatsModule } from '../src/chats/chats.module';
+import { ChatLlmService } from '../src/chats/chat-llm.service';
 import { SafeguardAnalysisService } from './../src/safeguard/safeguard-analysis.service';
 import { AnalysesService } from './../src/safeguard/analyses.service';
 import { ReportPdfService } from './../src/safeguard/report-pdf.service';
@@ -57,10 +63,19 @@ const STUB_RESULT = {
 
 describe('Safeguard API (e2e)', () => {
   let app: INestApplication<App>;
-  let store: SqliteSafeguardStore;
+  let close: (() => Promise<void>) | undefined;
 
   beforeAll(async () => {
-    store = new SqliteSafeguardStore(':memory:');
+    const opened = await openTestDatabase();
+    close = opened.close;
+    const store = new PostgresSafeguardStore(opened.db);
+
+    @Global()
+    @Module({
+      providers: [{ provide: DataSource, useValue: opened.db }],
+      exports: [DataSource],
+    })
+    class TestDatabaseModule {}
 
     @Module({
       providers: [
@@ -81,10 +96,23 @@ describe('Safeguard API (e2e)', () => {
     class OutsideModule {}
 
     const moduleFixture: TestingModule = await Test.createTestingModule({
-      imports: [SafeguardModule, OutsideModule],
+      imports: [
+        ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
+        TestDatabaseModule,
+        SafeguardModule,
+        OutsideModule,
+        ActionsModule,
+        ChatsModule,
+      ],
     })
       .overrideModule(SafeguardInfraModule)
       .useModule(TestInfraModule)
+      .overrideProvider(ChatLlmService)
+      .useValue({
+        reply: jest
+          .fn()
+          .mockResolvedValue({ reply: '테스트 상담 답변', isCrisis: false }),
+      })
       .compile();
 
     app = moduleFixture.createNestApplication();
@@ -105,7 +133,11 @@ describe('Safeguard API (e2e)', () => {
   });
 
   afterAll(async () => {
-    await app.close();
+    try {
+      await app?.close();
+    } finally {
+      await close?.();
+    }
   });
 
   it('GET / — UI 페이지를 서빙한다', () => {
@@ -118,14 +150,14 @@ describe('Safeguard API (e2e)', () => {
   describe('sessions', () => {
     it('POST — 파싱 불가 원문은 400', () => {
       return request(app.getHttpServer())
-        .post('/api/sessions')
+        .post('/sessions')
         .send({ rawText: '아무 형식도 아닌 텍스트' })
         .expect(400);
     });
 
     it('POST → GET → DELETE', async () => {
       const created = await request(app.getHttpServer())
-        .post('/api/sessions')
+        .post('/sessions')
         .send({ rawText: RAW })
         .expect(201);
       expect(created.body).toMatchObject({
@@ -144,15 +176,13 @@ describe('Safeguard API (e2e)', () => {
       expect(id).toMatch(/^ses_/);
 
       const got = await request(app.getHttpServer())
-        .get(`/api/sessions/${id}`)
+        .get(`/sessions/${id}`)
         .expect(200);
       expect((got.body as { sessionId: string }).sessionId).toBe(id);
       expect(got.body).not.toHaveProperty('messages');
 
-      await request(app.getHttpServer())
-        .delete(`/api/sessions/${id}`)
-        .expect(204);
-      await request(app.getHttpServer()).get(`/api/sessions/${id}`).expect(404);
+      await request(app.getHttpServer()).delete(`/sessions/${id}`).expect(204);
+      await request(app.getHttpServer()).get(`/sessions/${id}`).expect(404);
     });
   });
 
@@ -160,14 +190,14 @@ describe('Safeguard API (e2e)', () => {
     let sessionId: string;
     beforeAll(async () => {
       const r = await request(app.getHttpServer())
-        .post('/api/sessions')
+        .post('/sessions')
         .send({ rawText: RAW });
       sessionId = (r.body as { sessionId: string }).sessionId;
     });
 
     it('POST — 잘못된 context는 400 (스트림 열기 전), message는 노션 명세의 한 문장', async () => {
       const res = await request(app.getHttpServer())
-        .post('/api/analyses')
+        .post('/analyses')
         .send({
           sessionIds: [sessionId],
           context: 'invalid',
@@ -181,11 +211,11 @@ describe('Safeguard API (e2e)', () => {
 
     it('POST — 없는 세션은 404, 참여자가 아닌 피해자는 400', async () => {
       await request(app.getHttpServer())
-        .post('/api/analyses')
+        .post('/analyses')
         .send({ sessionIds: ['ses_none'], context: 'dm', victimName: '윤아' })
         .expect(404);
       await request(app.getHttpServer())
-        .post('/api/analyses')
+        .post('/analyses')
         .send({
           sessionIds: [sessionId],
           context: 'dm',
@@ -194,9 +224,48 @@ describe('Safeguard API (e2e)', () => {
         .expect(400);
     });
 
+    it('AI 실패는 스트림 error와 DB error 상태로 남고 PDF와 상담은 409', async () => {
+      jest
+        .spyOn(app.get(SafeguardAnalysisService), 'analyze')
+        .mockRejectedValueOnce(new Error('test AI unavailable'));
+      const res = await request(app.getHttpServer())
+        .post('/analyses')
+        .send({
+          sessionIds: [sessionId],
+          context: 'small_group',
+          victimName: '윤아',
+        })
+        .expect(201);
+      const lines = res.text
+        .trim()
+        .split('\n')
+        .map((line) => JSON.parse(line) as Record<string, unknown>);
+      const last = lines[lines.length - 1];
+      expect(last).toMatchObject({
+        type: 'error',
+        message: 'test AI unavailable',
+      });
+      const id = last.analysisId as string;
+      const saved = await request(app.getHttpServer())
+        .get(`/analyses/${id}`)
+        .expect(200);
+      expect(saved.body).toMatchObject({
+        status: 'error',
+        error: 'test AI unavailable',
+      });
+      await request(app.getHttpServer())
+        .get(`/analyses/${id}/report`)
+        .expect(409);
+      await request(app.getHttpServer())
+        .post('/chats/intro')
+        .send({ analysisId: id })
+        .expect(409);
+      await request(app.getHttpServer()).delete(`/analyses/${id}`).expect(204);
+    });
+
     it('POST 스트리밍 → GET → 목록 → 세션 삭제 409 → PDF → DELETE', async () => {
       const res = await request(app.getHttpServer())
-        .post('/api/analyses')
+        .post('/analyses')
         .send({
           sessionIds: [sessionId],
           context: 'small_group',
@@ -253,14 +322,14 @@ describe('Safeguard API (e2e)', () => {
       expect(utterances[0].utteranceId).toMatch(/^utt_/);
 
       const got = await request(app.getHttpServer())
-        .get(`/api/analyses/${analysisId}`)
+        .get(`/analyses/${analysisId}`)
         .expect(200);
       expect(got.body).toEqual(
         result.type === 'result' ? { ...result, type: undefined } : {},
       );
 
       const list = await request(app.getHttpServer())
-        .get('/api/analyses?limit=5')
+        .get('/analyses?limit=5')
         .expect(200);
       // 노션 명세: 배열을 그대로 주지 않고 { analyses: [...] } 로 감싼다
       const { analyses } = list.body as { analyses: unknown[] };
@@ -273,22 +342,46 @@ describe('Safeguard API (e2e)', () => {
         patterns: ['셔틀'],
       });
 
+      const cards = await request(app.getHttpServer())
+        .get(`/analyses/${analysisId}/actions`)
+        .expect(200);
+      expect(
+        (cards.body as { actions: { id: string }[] }).actions.map((a) => a.id),
+      ).toEqual(result.actionIds);
+
+      const intro = await request(app.getHttpServer())
+        .post('/chats/intro')
+        .send({ analysisId })
+        .expect(200);
+      const chatId = (intro.body as { sessionId: string }).sessionId;
+      expect(chatId).toMatch(/^[a-f0-9-]{36}$/);
+      await request(app.getHttpServer())
+        .post('/chats/messages')
+        .send({ sessionId: chatId, userMessage: '친구 때문에 속상해요' })
+        .expect(200)
+        .expect({
+          reply: '테스트 상담 답변',
+          isCrisis: false,
+          emergencyContacts: null,
+          fallback: false,
+        });
+
       const conflict = await request(app.getHttpServer())
-        .delete(`/api/sessions/${sessionId}`)
+        .delete(`/sessions/${sessionId}`)
         .expect(409);
       expect((conflict.body as { analysisIds: string[] }).analysisIds).toEqual([
         analysisId,
       ]);
 
       const session = await request(app.getHttpServer())
-        .get(`/api/sessions/${sessionId}`)
+        .get(`/sessions/${sessionId}`)
         .expect(200);
       expect((session.body as { analysisIds: string[] }).analysisIds).toEqual([
         analysisId,
       ]);
 
       const pdf = await request(app.getHttpServer())
-        .get(`/api/analyses/${analysisId}/report`)
+        .get(`/analyses/${analysisId}/report`)
         .buffer()
         .parse((res, cb) => {
           const chunks: Buffer[] = [];
@@ -300,16 +393,26 @@ describe('Safeguard API (e2e)', () => {
       expect((pdf.body as Buffer).subarray(0, 4).toString()).toBe('%PDF');
 
       await request(app.getHttpServer())
-        .delete(`/api/analyses/${analysisId}`)
+        .delete(`/analyses/${analysisId}`)
         .expect(204);
       await request(app.getHttpServer())
-        .get(`/api/analyses/${analysisId}`)
+        .delete(`/analyses/${analysisId}`)
         .expect(404);
       await request(app.getHttpServer())
-        .get(`/api/analyses/${analysisId}/report`)
+        .post('/chats/messages')
+        .send({ sessionId: chatId, userMessage: '삭제 후 요청' })
         .expect(404);
       await request(app.getHttpServer())
-        .delete(`/api/sessions/${sessionId}`)
+        .get(`/analyses/${analysisId}/actions`)
+        .expect(404);
+      await request(app.getHttpServer())
+        .get(`/analyses/${analysisId}`)
+        .expect(404);
+      await request(app.getHttpServer())
+        .get(`/analyses/${analysisId}/report`)
+        .expect(404);
+      await request(app.getHttpServer())
+        .delete(`/sessions/${sessionId}`)
         .expect(204);
     }, 60_000);
   });

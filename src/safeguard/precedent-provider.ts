@@ -36,7 +36,7 @@ export interface PrecedentMatchInput {
 }
 
 export interface PrecedentMatchOutput {
-  /** 사건번호 → 요지 한 줄 (전체 결과에서 중복 제거된 사전) */
+  /** 판례 일련번호 → 사건번호와 요지 한 줄 (전체 결과에서 중복 제거) */
   precedentDict: Record<string, string>;
   /** 입력 순서 그대로 + 메시지당 판례 3개 고정 */
   analysisTargets: (AnalysisTarget & { matchedPrecedentIds: string[] })[];
