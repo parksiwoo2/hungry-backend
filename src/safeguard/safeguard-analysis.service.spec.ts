@@ -193,4 +193,20 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
 
     expect(r.flagged[0].appliedPrecedentIds).toEqual(['2006도546']);
   });
+
+  it('buildDocument: 확정 구간이 없으면 기간 자리에 undefined 가 아니라 "확인된 피해 없음"이 나온다', () => {
+    const inp = input();
+    const empty = svc.aggregate([], inp.messages);
+    for (const legal of [false, true]) {
+      const doc = svc.buildDocument(
+        inp,
+        { flagged: [], patterns: [] },
+        empty,
+        legal,
+      );
+      expect(doc).not.toContain('undefined');
+      expect(doc).toContain('확인된 피해가 없습니다');
+      expect(doc).not.toMatch(/~ .*기간 동안/);
+    }
+  });
 });

@@ -731,6 +731,25 @@ export class SafeguardAnalysisService {
     };
   }
 
+  /**
+   * 개요 첫 문장 — 텍스트 문서와 PDF가 같이 쓴다.
+   * 확정 구간이 없으면 start·end 가 비므로 기간을 쓰지 않는다 ("undefined ~ undefined" 방지).
+   */
+  static leadSentence(summary: Summary): string {
+    if (summary.count === 0 || !summary.start || !summary.end) {
+      return '분석 범위에서 확인된 피해가 없습니다.';
+    }
+    return `${summary.start} ~ ${summary.end} 기간 동안 총 ${summary.count}회의 피해가 확인되었습니다.`;
+  }
+
+  /** 빈 집계는 빈칸 대신 "없음" */
+  static countsLine(counts: Record<string, number>): string {
+    const s = Object.entries(counts)
+      .map(([k, v]) => `${k} ${v}회`)
+      .join(', ');
+    return s || '없음';
+  }
+
   /** 문서 생성(#4). legal=false 판단 근거만 / legal=true 관련 조항·절차 포함 */
   buildDocument(
     input: AnalyzeInput,
@@ -743,15 +762,13 @@ export class SafeguardAnalysisService {
     const out: string[] = [];
 
     // [첫 문단 — 요약]
-    const typeSummary = Object.entries(summary.typeCounts)
-      .map(([k, v]) => `${k} ${v}회`)
-      .join(', ');
-    const attackers = Object.entries(summary.attackerCounts)
-      .map(([k, v]) => `${k} ${v}회`)
-      .join(', ');
+    const typeSummary = SafeguardAnalysisService.countsLine(summary.typeCounts);
+    const attackers = SafeguardAnalysisService.countsLine(
+      summary.attackerCounts,
+    );
 
     out.push(
-      `${summary.start} ~ ${summary.end} 기간 동안 총 ${summary.count}회의 피해가 확인되었습니다.`,
+      SafeguardAnalysisService.leadSentence(summary),
       `· 유형별: ${typeSummary}`,
       `· 발신자별: ${attackers}`,
       `· 즉시 조치가 필요한 건: ${summary.urgentCount}건`,

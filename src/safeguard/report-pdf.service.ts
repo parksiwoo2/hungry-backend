@@ -14,10 +14,11 @@
  */
 import { Injectable, OnModuleDestroy, Logger } from '@nestjs/common';
 import type { Browser } from 'puppeteer';
-import type {
-  ChatMessage,
-  FlaggedItem,
-  AnalyzeInput,
+import {
+  SafeguardAnalysisService,
+  type ChatMessage,
+  type FlaggedItem,
+  type AnalyzeInput,
 } from './safeguard-analysis.service';
 import {
   LawRegistry,
@@ -105,14 +106,10 @@ export class ReportPdfService implements OnModuleDestroy {
     const { input, result, summary, legal } = r;
     const isDm = input.context === 'dm';
 
-    const typeSummary = Object.entries(summary.typeCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([k, v]) => `${k} ${v}회`)
-      .join(' · ');
-    const attackers = Object.entries(summary.attackerCounts)
-      .sort((a, b) => b[1] - a[1])
-      .map(([k, v]) => `${k} ${v}회`)
-      .join(' · ');
+    const typeSummary = SafeguardAnalysisService.countsLine(summary.typeCounts);
+    const attackers = SafeguardAnalysisService.countsLine(
+      summary.attackerCounts,
+    );
 
     const items = result.flagged
       .map((f) => this.renderItem(f, input.messages, isDm, legal))
@@ -182,7 +179,7 @@ export class ReportPdfService implements OnModuleDestroy {
 
 <h2>1. 피해 개요</h2>
 <div class="overview">
-  <div class="lead">${summary.start} ~ ${summary.end} 기간 동안 총 ${summary.count}회의 피해가 확인되었습니다.</div>
+  <div class="lead">${this.esc(SafeguardAnalysisService.leadSentence(summary))}</div>
   <dl>
     <dt>유형별</dt><dd>${this.esc(typeSummary)}</dd>
     <dt>발신자별</dt><dd>${this.esc(attackers)}</dd>
