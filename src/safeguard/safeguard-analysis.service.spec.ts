@@ -2,6 +2,7 @@ import {
   SafeguardAnalysisService,
   AnalyzeInput,
 } from './safeguard-analysis.service';
+import { z } from 'zod';
 import { parseKakao } from './kakao-parser';
 import {
   NoopPrecedentProvider,
@@ -217,6 +218,7 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
             matchedPrecedentIds: ['2006도546'],
           })),
         }),
+      describe: () => Promise.resolve([]),
     };
     const engine = new SafeguardAnalysisService(provider);
     jest.spyOn(engine, 'screen').mockResolvedValue({
@@ -250,5 +252,32 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
     expect(doc).not.toContain('undefined');
     expect(doc).toContain('확인된 피해가 없습니다');
     expect(doc).not.toMatch(/~ .*기간 동안/);
+  });
+
+  it('callStructured: 출력이 토큰 한도에서 잘리면 JSON 파싱 오류 대신 한도 초과를 알린다', async () => {
+    // 데모12(277건) 실측 — 1차 출력이 8000 토큰에서 끊겨 "Unterminated string in JSON"으로 실패했다
+    const engine = new SafeguardAnalysisService(new NoopPrecedentProvider());
+    (engine as unknown as { _client: unknown })._client = {
+      messages: {
+        create: () =>
+          Promise.resolve({
+            stop_reason: 'max_tokens',
+            content: [{ type: 'text', text: '{"segments":[{"summary":"잘린' }],
+          }),
+      },
+    };
+    type Call = (...a: unknown[]) => Promise<unknown>;
+    const priv = engine as unknown as { callStructured: Call };
+    const call: Call = (...a) => priv.callStructured(...a);
+
+    await expect(
+      call(
+        '1차 선별',
+        z.object({ segments: z.array(z.object({ summary: z.string() })) }),
+        's',
+        'c',
+        'low',
+      ),
+    ).rejects.toThrow(/1차 선별 출력이 토큰 한도.*잘림/);
   });
 });
