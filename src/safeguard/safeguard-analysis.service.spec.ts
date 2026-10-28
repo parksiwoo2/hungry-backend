@@ -117,7 +117,6 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
       inp,
       { flagged: [...flagged] as never, patterns: [] },
       svc.aggregate([...flagged] as never, inp.messages),
-      true,
     );
     expect(doc).toContain(
       '■ 2026-07-18T23:50 ~ 2026-07-18T23:59 · 정태오 (메시지 3개)',
@@ -127,6 +126,56 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
     expect(doc).toContain('스토킹처벌법 제18조');
     // 1:1이라 협박은 그대로 형법 283조 (공연성 불요)
     expect(doc).toContain('형법 제283조');
+    // 문서는 한 종류 — 조문과 AI 근거가 같은 항목에 같이 나온다
+    expect(doc).toContain('· AI 판단 근거: 연속 전송');
+    expect(doc).toContain('· AI 판단 근거: 해악 고지');
+  });
+
+  it('buildDocument: 참고 판례가 있으면 사건·결론·인용 발언을 적고 없으면 그 절이 없다', () => {
+    const inp = input();
+    const flagged = [
+      {
+        messageNos: [6],
+        harmTypes: ['협박'],
+        severity: '즉시조치',
+        reason: '해악 고지',
+        appliedPrecedentIds: ['227693'],
+      },
+    ] as const;
+    const summary = svc.aggregate([...flagged] as never, inp.messages);
+    const precedent = {
+      id: '227693',
+      caseNumber: '2022도4171',
+      court: '대법원',
+      caseName: '정통망법위반(명예훼손)',
+      decidedOn: '2022-07-28',
+      summary: '비방할 목적의 의미',
+      refLaws: '정보통신망법 제70조 제1항',
+      quotedTexts: ['너희들도 조심해라.'],
+      rulings: [
+        { court: '대구지방법원 (원심)', guilty: true },
+        { court: '대법원', guilty: false },
+      ],
+    };
+
+    const withP = svc.buildDocument(
+      inp,
+      { flagged: [...flagged] as never, patterns: [] },
+      summary,
+      [precedent],
+    );
+    expect(withP).toContain('[참고 판례');
+    expect(withP).toContain('■ 대법원 2022. 7. 28. 선고 2022도4171 판결');
+    expect(withP).toContain('결론: 대구지방법원 (원심) 유죄 → 대법원 무죄');
+    expect(withP).toContain('"너희들도 조심해라."');
+    expect(withP).toContain('관련 구간: 2026-07-19T00:07 · 정태오');
+
+    const without = svc.buildDocument(
+      inp,
+      { flagged: [...flagged] as never, patterns: [] },
+      summary,
+    );
+    expect(without).not.toContain('참고 판례');
   });
 
   it('detectSystemPatterns: 다중 초대 대상에 피해자가 있어도 방폭을 센다', () => {
@@ -197,16 +246,9 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
   it('buildDocument: 확정 구간이 없으면 기간 자리에 undefined 가 아니라 "확인된 피해 없음"이 나온다', () => {
     const inp = input();
     const empty = svc.aggregate([], inp.messages);
-    for (const legal of [false, true]) {
-      const doc = svc.buildDocument(
-        inp,
-        { flagged: [], patterns: [] },
-        empty,
-        legal,
-      );
-      expect(doc).not.toContain('undefined');
-      expect(doc).toContain('확인된 피해가 없습니다');
-      expect(doc).not.toMatch(/~ .*기간 동안/);
-    }
+    const doc = svc.buildDocument(inp, { flagged: [], patterns: [] }, empty);
+    expect(doc).not.toContain('undefined');
+    expect(doc).toContain('확인된 피해가 없습니다');
+    expect(doc).not.toMatch(/~ .*기간 동안/);
   });
 });

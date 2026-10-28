@@ -23,6 +23,7 @@ import { LawRegistry, REMOVAL_TRACK, CIVIL_TRACK } from './law-registry';
 import { PRECEDENT_PROVIDER } from './precedent-provider';
 import type {
   AnalysisTarget,
+  PrecedentDetail,
   PrecedentMatchOutput,
   PrecedentProvider,
 } from './precedent-provider';
@@ -750,12 +751,16 @@ export class SafeguardAnalysisService {
     return s || '없음';
   }
 
-  /** 문서 생성(#4). legal=false 판단 근거만 / legal=true 관련 조항·절차 포함 */
+  /**
+   * 문서 생성(#4) — 텍스트판. PDF(report-pdf.service.ts)와 같은 구성:
+   * 요약 → 피해별 항목(인용·유형·정도·AI 판단 근거·관련 조항) → 참고 판례 → 절차.
+   * AI가 쓴 문장은 "AI 판단 근거"로 표시해 사실·조문과 구분한다.
+   */
   buildDocument(
     input: AnalyzeInput,
     result: { flagged: FlaggedItem[]; patterns: string[] },
     summary: Summary,
-    legal = false,
+    precedents: PrecedentDetail[] = [],
   ): string {
     const { messages, context } = input;
     const { flagged, patterns } = result;
@@ -800,7 +805,8 @@ export class SafeguardAnalysisService {
         `  · 정도: ${f.severity}`,
       ];
 
-      if (legal) {
+      block.push(`  · AI 판단 근거: ${f.reason}`);
+      {
         const isDm = context === 'dm';
         const seenArticle = new Set<string>();
         const seenNotice = new Set<string>();
@@ -826,13 +832,56 @@ export class SafeguardAnalysisService {
             block.push(`    ※ ${r.meta.note}`);
           }
         }
-      } else {
-        block.push(`  · 근거: ${f.reason}`);
       }
       out.push(block.join('\n'), '');
     }
 
-    if (legal) {
+    if (precedents.length > 0) {
+      out.push(
+        '[참고 판례 — AI가 판단 시 참고한 법원 판결입니다. 이 사건에 그대로 적용된다는 뜻은 아닙니다]',
+      );
+      for (const p of precedents) {
+        const title = [
+          p.court,
+          koreanDate(p.decidedOn),
+          '선고',
+          p.caseNumber,
+          '판결',
+        ]
+          .filter(Boolean)
+          .join(' ');
+        const related = flagged
+          .filter((f) => f.appliedPrecedentIds.includes(p.id))
+          .map((f) => {
+            const srcs = f.messageNos.map((no) => messages[no - 1]);
+            const senders = [...new Set(srcs.map((m) => m.sender))].join(', ');
+            return srcs.length === 1
+              ? `${srcs[0].time} · ${senders}`
+              : `${srcs[0].time} ~ ${srcs[srcs.length - 1].time} · ${senders}`;
+          })
+          .join(' / ');
+        const lines = [`■ ${title}`];
+        if (p.caseName) lines.push(`  ${p.caseName}`);
+        if (p.rulings.length) {
+          lines.push(
+            `  · 결론: ${p.rulings
+              .map(
+                (r) =>
+                  `${r.court} ${r.guilty === null ? '판단 없음' : r.guilty ? '유죄' : '무죄'}`,
+              )
+              .join(' → ')}`,
+          );
+        }
+        for (const q of p.quotedTexts)
+          lines.push(`  · 법원이 다룬 발언: "${q}"`);
+        if (p.summary) lines.push(`  · 판시사항: ${p.summary}`);
+        if (p.refLaws) lines.push(`  · 참조조문: ${p.refLaws}`);
+        if (related) lines.push(`  · 관련 구간: ${related}`);
+        out.push(lines.join('\n'), '');
+      }
+    }
+
+    {
       // 삭제 트랙 — 처벌과 별개로 병행 가능
       const fastLaw = this.laws.article(REMOVAL_TRACK.fast.articleKey);
       const officialLaw = this.laws.article(REMOVAL_TRACK.official.articleKey);
@@ -867,4 +916,10 @@ export class SafeguardAnalysisService {
     }
     return out.join('\n');
   }
+}
+
+/** "2022-07-28" → "2022. 7. 28." (판결 인용 관례) */
+function koreanDate(iso: string | null): string {
+  const m = iso?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[1]}. ${Number(m[2])}. ${Number(m[3])}.` : (iso ?? '');
 }

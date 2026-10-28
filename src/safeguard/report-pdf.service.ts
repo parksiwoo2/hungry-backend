@@ -27,6 +27,7 @@ import {
   REMOVAL_TRACK,
   CIVIL_TRACK,
 } from './law-registry';
+import type { PrecedentDetail, PrecedentRuling } from './precedent-provider';
 
 export interface ReportInput {
   input: AnalyzeInput;
@@ -41,8 +42,8 @@ export interface ReportInput {
     distinctDays: number;
     isRepeated: boolean;
   };
-  /** true면 관련 조항·절차를 함께 싣고, false면 판단 근거만 싣는다 */
-  legal: boolean;
+  /** 확정 구간이 참고한 판례 상세 (appliedPrecedentIds 순). 없으면 절을 만들지 않는다 */
+  precedents: PrecedentDetail[];
 }
 
 @Injectable()
@@ -102,8 +103,9 @@ export class ReportPdfService implements OnModuleDestroy {
     );
   }
 
-  private buildHtml(r: ReportInput): string {
-    const { input, result, summary, legal } = r;
+  /** 문서는 한 종류 — 사실·집계, AI 판단 근거, 관련 조문, 참고 판례, 절차를 모두 싣는다 */
+  buildHtml(r: ReportInput): string {
+    const { input, result, summary, precedents } = r;
     const isDm = input.context === 'dm';
 
     const typeSummary = SafeguardAnalysisService.countsLine(summary.typeCounts);
@@ -112,8 +114,12 @@ export class ReportPdfService implements OnModuleDestroy {
     );
 
     const items = result.flagged
-      .map((f) => this.renderItem(f, input.messages, isDm, legal))
+      .map((f) => this.renderItem(f, input.messages, isDm))
       .join('\n');
+    const precedentSection = precedents.length
+      ? this.renderPrecedents(precedents, result.flagged, input.messages)
+      : '';
+    const trackNo = precedents.length ? 4 : 3;
 
     return `<!doctype html><html lang="ko"><head><meta charset="utf-8">
 <style>
@@ -160,6 +166,18 @@ export class ReportPdfService implements OnModuleDestroy {
   .law .art { font-weight: 600; }
   .law .sub { color: #555; padding-left: 3mm; display: block; margin-top: 0.6mm; }
   .reason { font-size: 9pt; color: #555; }
+  .reason .label { color: #888; margin-right: 1.5mm; }
+
+  .prec { margin-bottom: 4mm; padding-left: 4mm; border-left: 2.5px solid #ccc;
+          break-inside: avoid; page-break-inside: avoid; }
+  .prec .case { font-weight: 600; }
+  .prec .name { color: #555; font-size: 9pt; }
+  .prec dl { display: grid; grid-template-columns: 26mm 1fr; gap: 1mm 3mm;
+             margin: 1.5mm 0 0; font-size: 9pt; }
+  .prec dt { color: #666; }
+  .prec dd { margin: 0; }
+  .prec blockquote { margin: 0; font-size: 9pt; }
+  .prec-note { font-size: 9pt; color: #666; margin: 0 0 3mm; }
 
   .track { margin-bottom: 4mm; break-inside: avoid; }
   .track h3 { color: #1a1a1a; }
@@ -192,7 +210,9 @@ export class ReportPdfService implements OnModuleDestroy {
 <h2>2. 피해 내역</h2>
 ${items}
 
-${legal ? this.renderTracks(isDm) : ''}
+${precedentSection}
+
+${this.renderTracks(isDm, trackNo)}
 
 <div class="disclaimer">
   본 정리는 참고용이며 법률 자문이 아닙니다.
@@ -220,7 +240,6 @@ ${legal ? this.renderTracks(isDm) : ''}
     f: FlaggedItem,
     messages: ChatMessage[],
     isDm: boolean,
-    legal: boolean,
   ): string {
     const srcs = f.messageNos.map((no) => messages[no - 1]);
     const first = srcs[0];
@@ -240,10 +259,9 @@ ${legal ? this.renderTracks(isDm) : ''}
                 `<div><span class="qmeta">${this.esc(m.time.slice(5, 16))} ${this.esc(m.sender)}</span> ${this.esc(m.text)}</div>`,
             )
             .join('');
-    const laws = legal ? this.renderLaws(f.harmTypes, isDm) : '';
-    const reason = !legal
-      ? `<div class="reason">${this.esc(f.reason)}</div>`
-      : '';
+    // AI가 쓴 문장은 표시를 붙여 사실·조문과 구분한다
+    const reason = `<div class="reason"><span class="label">AI 판단 근거</span>${this.esc(f.reason)}</div>`;
+    const laws = this.renderLaws(f.harmTypes, isDm);
 
     return `<div class="item ${f.severity === '즉시조치' ? 'urgent' : ''}">
   <div class="head">
@@ -286,7 +304,86 @@ ${legal ? this.renderTracks(isDm) : ''}
     return rows.length ? `<div class="law">${rows.join('')}</div>` : '';
   }
 
-  private renderTracks(isDm: boolean): string {
+  /**
+   * 참고 판례 — 2차 판단이 근거로 삼은 판결. 원문(사건·요지·참조조문·인용 발언)과
+   * 심급별 결론만 싣고, AI가 쓴 판례 요약은 싣지 않는다.
+   */
+  private renderPrecedents(
+    precedents: PrecedentDetail[],
+    flagged: FlaggedItem[],
+    messages: ChatMessage[],
+  ): string {
+    const blocks = precedents.map((p) => {
+      const title = [
+        p.court,
+        this.koreanDate(p.decidedOn),
+        '선고',
+        p.caseNumber,
+        '판결',
+      ]
+        .filter(Boolean)
+        .join(' ');
+      const related = flagged
+        .filter((f) => f.appliedPrecedentIds.includes(p.id))
+        .map((f) => this.itemLabel(f, messages))
+        .join(' / ');
+      const rows: string[] = [];
+      if (p.rulings.length) {
+        rows.push(
+          `<dt>결론</dt><dd>${this.esc(this.rulingsLine(p.rulings))}</dd>`,
+        );
+      }
+      if (p.quotedTexts.length) {
+        rows.push(
+          `<dt>법원이 다룬 발언</dt><dd><blockquote>${p.quotedTexts
+            .map((t) => `<div>${this.esc(t)}</div>`)
+            .join('')}</blockquote></dd>`,
+        );
+      }
+      if (p.summary)
+        rows.push(`<dt>판시사항</dt><dd>${this.esc(p.summary)}</dd>`);
+      if (p.refLaws)
+        rows.push(`<dt>참조조문</dt><dd>${this.esc(p.refLaws)}</dd>`);
+      if (related) rows.push(`<dt>관련 구간</dt><dd>${this.esc(related)}</dd>`);
+      return `<div class="prec">
+  <div class="case">${this.esc(title)}</div>
+  ${p.caseName ? `<div class="name">${this.esc(p.caseName)}</div>` : ''}
+  <dl>${rows.join('')}</dl>
+</div>`;
+    });
+    return `<h2>3. 참고 판례</h2>
+<p class="prec-note">AI가 피해 유형·정도를 판단할 때 참고한 법원 판결입니다.
+  이 사건에 그대로 적용된다는 뜻은 아닙니다. 결론은 사안에 따라 다릅니다.</p>
+${blocks.join('\n')}`;
+  }
+
+  /** "대구지방법원 (원심) 유죄 → 대법원 무죄" */
+  private rulingsLine(rulings: PrecedentRuling[]): string {
+    const word = (g: boolean | null) =>
+      g === null ? '판단 없음' : g ? '유죄' : '무죄';
+    return rulings.map((r) => `${r.court} ${word(r.guilty)}`).join(' → ');
+  }
+
+  /** "2022-07-28" → "2022. 7. 28." (판결 인용 관례) */
+  private koreanDate(iso: string | null): string {
+    const m = iso?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    return m ? `${m[1]}. ${Number(m[2])}. ${Number(m[3])}.` : (iso ?? '');
+  }
+
+  /** 구간을 가리키는 짧은 표식 — "10-03 14:22 ~ 14:23 · 학생A, 학생B" */
+  private itemLabel(f: FlaggedItem, messages: ChatMessage[]): string {
+    const srcs = f.messageNos.map((no) => messages[no - 1]);
+    const first = srcs[0];
+    const last = srcs[srcs.length - 1];
+    const senders = [...new Set(srcs.map((m) => m.sender))].join(', ');
+    const span =
+      srcs.length === 1
+        ? first.time.slice(5, 16)
+        : `${first.time.slice(5, 16)} ~ ${last.time.slice(11, 16)}`;
+    return `${span} · ${senders}`;
+  }
+
+  private renderTracks(isDm: boolean, no: number): string {
     const fast = this.laws.article(REMOVAL_TRACK.fast.articleKey);
     const official = this.laws.article(REMOVAL_TRACK.official.articleKey);
     const civil = CIVIL_TRACK.map((k) => this.laws.article(k)?.라벨)
@@ -298,7 +395,7 @@ ${legal ? this.renderTracks(isDm) : ''}
          모욕죄·명예훼손죄가 성립하기 어렵습니다. 대신 반복 전송·협박·스토킹 조항으로 검토하였습니다.</p>`
       : '';
 
-    return `<h2>3. 병행 가능한 절차</h2>
+    return `<h2>${no}. 병행 가능한 절차</h2>
 <div class="track">
   <h3>게시물 삭제·차단 — 처벌 절차와 동시에 진행할 수 있습니다</h3>
   <p><span class="name">빠른 경로 · ${this.esc(fast?.라벨 ?? '정통망법 제44조의2')}</span><br>${this.esc(REMOVAL_TRACK.fast.how)}</p>

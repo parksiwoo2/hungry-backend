@@ -42,8 +42,36 @@ export interface PrecedentMatchOutput {
   analysisTargets: (AnalysisTarget & { matchedPrecedentIds: string[] })[];
 }
 
+/** 심급별 결론 — guilty 가 null 이면 그 심급이 유무죄를 판단하지 않았거나 기록이 없는 것 */
+export interface PrecedentRuling {
+  court: string;
+  guilty: boolean | null;
+}
+
+/**
+ * 정리 문서의 "참고 판례" 절에 실을 판례 상세.
+ * 요지·참조조문·인용 발언은 판례 원문이고, rulings 만 팀 분석 테이블의 결론 플래그다.
+ * AI가 쓴 사실관계·판단 요약 문장은 넣지 않는다 — 문서에 판례 설명처럼 인쇄되면 안 된다.
+ */
+export interface PrecedentDetail {
+  id: string;
+  caseNumber: string;
+  court: string | null;
+  caseName: string | null;
+  /** YYYY-MM-DD */
+  decidedOn: string | null;
+  /** 판시사항 첫 항목 (없으면 판결요지) — 2차 사전과 같은 원문 */
+  summary: string | null;
+  refLaws: string | null;
+  /** 법원이 다룬 발언 — 판결문에서 인용된 원문 */
+  quotedTexts: string[];
+  rulings: PrecedentRuling[];
+}
+
 export interface PrecedentProvider {
   match(input: PrecedentMatchInput): Promise<PrecedentMatchOutput>;
+  /** 문서 생성 시점에 호출. 모르는 ID는 빼고 입력 순서로 돌려준다. 실패하면 빈 배열 */
+  describe(ids: string[]): Promise<PrecedentDetail[]>;
 }
 
 /**
@@ -62,5 +90,9 @@ export class NoopPrecedentProvider implements PrecedentProvider {
         matchedPrecedentIds: [],
       })),
     });
+  }
+
+  describe(): Promise<PrecedentDetail[]> {
+    return Promise.resolve([]);
   }
 }
