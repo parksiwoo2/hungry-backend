@@ -40,6 +40,29 @@ const MAX_GIST = 200;
 const MAX_QUOTES = 3;
 
 /**
+ * 우리 유형 → 팀 분석 테이블 crime_types 에 걸 정규식. 죄명 표기가 자유 문자열이라
+ * ("정보통신망법 위반(명예훼손)", "모욕죄") 포함 매칭으로 잡는다.
+ */
+const CRIME_PATTERN: Record<string, string> = {
+  언어폭력: '모욕|명예훼손',
+  명예훼손: '명예훼손',
+  모욕: '모욕',
+  성희롱: '통신매체|성희롱|음란|성폭력|성적',
+  협박: '협박',
+  스토킹: '스토킹|불안감|반복',
+  집단따돌림: '모욕|협박|강요|학교폭력|명예훼손|따돌림',
+  갈취강요: '공갈|강요|갈취',
+};
+
+/** 후보 유형들을 하나의 정규식으로. 아는 유형이 없으면 undefined (필터 없음) */
+export function crimeTypePattern(types?: string[]): string | undefined {
+  const parts = [
+    ...new Set((types ?? []).flatMap((t) => CRIME_PATTERN[t] ?? [])),
+  ];
+  return parts.length ? parts.join('|') : undefined;
+}
+
+/**
  * 팀 분석 테이블(precedent_analysis_issues ⋈ precedent_issue_findings) 한 행.
  * 팀 서비스에 조회 메서드가 없어 읽기 전용 SQL로 직접 본다.
  */
@@ -193,17 +216,21 @@ export class VectorPrecedentProvider implements PrecedentProvider {
     for (let i = 0; i < searchable.length; i += MAX_TARGETS_PER_CALL) {
       const chunk = searchable.slice(i, i + MAX_TARGETS_PER_CALL);
       const res = await this.matcher.findMatches({
-        analysisTargets: chunk.map(({ text, t }) => ({
-          targetText: text.slice(0, MAX_TARGET_TEXT),
-          legalContext: {
-            isGroupChat: t.legalContext.isGroupChat,
-            audienceCount: Math.min(
-              Math.max(0, Math.trunc(t.legalContext.audienceCount)),
-              MAX_AUDIENCE,
-            ),
-            victimIdentifiable: t.legalContext.victimIdentifiable,
-          },
-        })),
+        analysisTargets: chunk.map(({ text, t }) => {
+          const pattern = crimeTypePattern(t.candidateTypes);
+          return {
+            targetText: text.slice(0, MAX_TARGET_TEXT),
+            legalContext: {
+              isGroupChat: t.legalContext.isGroupChat,
+              audienceCount: Math.min(
+                Math.max(0, Math.trunc(t.legalContext.audienceCount)),
+                MAX_AUDIENCE,
+              ),
+              victimIdentifiable: t.legalContext.victimIdentifiable,
+            },
+            ...(pattern ? { crimeTypePattern: pattern } : {}),
+          };
+        }),
       });
       chunk.forEach(({ index }, k) => {
         hits[index] = res.analysisTargets[k]?.matches ?? [];
@@ -212,24 +239,44 @@ export class VectorPrecedentProvider implements PrecedentProvider {
     return hits;
   }
 
-  /** "대법원 2003도709: 판시사항 첫 항목" — 사건번호나 원문 요지가 없으면 null */
+  /**
+   * 사전 한 줄. 사건번호가 없으면 null.
+   *   원문 요지가 있으면  "대법원 2003도709: 판시사항 첫 항목"
+   *   없으면(하급심 대부분) "서울중앙지방법원 2023고단1234 [모욕] 서울중앙지방법원 유죄 — 법원이 다룬 발언: "…""
+   * 폴백도 AI 문장은 쓰지 않는다 — 사건명은 법령 API 원문, 결론은 플래그, 발언은 판결문 인용(코드로 대조된 것).
+   */
   private async dictLine(
     m: PrecedentMatch,
   ): Promise<{ caseNumber: string; line: string } | null> {
     const caseNumber = m.caseNumber?.trim();
     if (!caseNumber) return null;
-    let source: string;
-    let court: string | null;
+    let source = '';
+    let court: string | null = m.courtName;
     try {
       const detail = await this.store.findOne(m.precedentId);
       source = detail.summary?.trim() || detail.gist?.trim() || '';
-      court = detail.courtName;
+      court = detail.courtName ?? court;
     } catch {
-      return null; // 저장소에 원문이 없는 판례
+      // 저장소에 상세가 없어도 검색 결과의 원문 인용으로 폴백한다
     }
-    if (!source) return null;
     const head = [court?.trim(), caseNumber].filter(Boolean).join(' ');
-    return { caseNumber, line: `${head}: ${firstItem(source)}` };
+    if (source) return { caseNumber, line: `${head}: ${firstItem(source)}` };
+
+    const quotes = (m.evidenceTexts ?? [])
+      .map((t) => t.trim())
+      .filter(Boolean)
+      .slice(0, MAX_QUOTES);
+    if (quotes.length === 0) return null;
+    const rulings = (m.courtFindings ?? [])
+      .filter((f) => f.courtName)
+      .map(
+        (f) =>
+          `${f.courtName} ${f.isGuiltyRecognized === null || f.isGuiltyRecognized === undefined ? '판단 없음' : f.isGuiltyRecognized ? '유죄' : '무죄'}`,
+      )
+      .join(' → ');
+    const name = m.caseName?.trim() ? ` [${m.caseName.trim()}]` : '';
+    const line = `${head}${name}${rulings ? ` ${rulings}` : ''} — 법원이 다룬 발언: ${quotes.map((q) => `"${q.replace(/\s+/g, ' ').slice(0, 80)}"`).join(' / ')}`;
+    return { caseNumber, line };
   }
 }
 

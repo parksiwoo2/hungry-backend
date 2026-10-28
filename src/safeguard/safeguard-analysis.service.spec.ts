@@ -48,11 +48,14 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
           messageNos: [6],
           victimIdentifiable: true,
           summary: '조건을 걸어 위해를 예고',
+          candidateTypes: ['협박'],
         },
       ],
       patterns: [],
     });
     expect(targets).toHaveLength(2);
+    // 1차의 후보 유형은 판례 검색 범위로만 쓰인다 (2차 프롬프트에는 들어가지 않음)
+    expect(targets[1].candidateTypes).toEqual(['협박']);
     expect(targets[0].targetMessageId).toBe('3,4,5');
     expect(targets[0].targetText).toBe(
       '응답 없는 상대에게 심야에 연속 전송\n자냐\n답장해라\n무시하냐 진짜',

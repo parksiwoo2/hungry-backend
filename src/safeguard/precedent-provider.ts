@@ -29,6 +29,12 @@ export interface AnalysisTarget {
   targetMessageId: string;
   targetText: string;
   legalContext: LegalContext;
+  /**
+   * 1차가 넉넉히 고른 후보 유형(HarmType). 검색 범위를 죄명으로 좁히는 데만 쓰고
+   * 2차 프롬프트에는 넣지 않는다 — 실측에서 사실 유사도만으로는 모욕 구간에 명예훼손
+   * 판례가 붙었다(데모 96구간 중 죄명 일치 39건).
+   */
+  candidateTypes?: string[];
 }
 
 export interface PrecedentMatchInput {

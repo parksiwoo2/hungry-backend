@@ -156,6 +156,54 @@ describe('VectorPrecedentProvider — 팀 판례 검색을 우리 계약으로 �
     expect(sent).not.toHaveProperty('targetMessageId');
   });
 
+  it('구간의 후보 유형(candidateTypes)을 죄명 정규식으로 바꿔 검색 요청에 넣는다', async () => {
+    const { provider, requests } = fakes(() => [], {});
+
+    await provider.match({
+      analysisTargets: [
+        { ...target('1'), candidateTypes: ['갈취강요', '협박'] },
+        { ...target('2'), candidateTypes: ['모욕'] },
+        target('3'), //                         후보 유형 없음 → 필터 없이
+      ],
+    });
+
+    const sent = requests[0].analysisTargets;
+    expect(sent[0].crimeTypePattern).toBe('공갈|강요|갈취|협박');
+    expect(sent[1].crimeTypePattern).toBe('모욕');
+    expect(sent[2]).not.toHaveProperty('crimeTypePattern');
+  });
+
+  it('요지 원문이 없는 판례는 사건명·심급 결론·법원이 다룬 발언(판결문 인용)으로 사전 줄을 만든다', async () => {
+    // 하급심은 판시사항이 거의 없다 — 그래도 "어떤 발언이 어떤 죄명으로 어떻게 판단됐는지"는 원문·플래그로 적을 수 있다
+    const { provider } = fakes(
+      () => [
+        {
+          ...hit('300', '2023고단1234'),
+          courtName: '서울중앙지방법원',
+          caseName: '모욕',
+          evidenceTexts: ['야 돼지 꺼져', '꿀꿀'],
+          courtFindings: [
+            { courtName: '서울중앙지방법원', isGuiltyRecognized: true },
+          ],
+        } as PrecedentMatch,
+      ],
+      {
+        '300': stored({
+          courtName: '서울중앙지방법원',
+          summary: null,
+          gist: null,
+        }),
+      },
+    );
+
+    const out = await provider.match({ analysisTargets: [target('1')] });
+
+    expect(out.precedentDict).toEqual({
+      '300':
+        '서울중앙지방법원 2023고단1234 [모욕] 서울중앙지방법원 유죄 — 법원이 다룬 발언: "야 돼지 꺼져" / "꿀꿀"',
+    });
+  });
+
   it('검색이 실패해도 분석을 멈추지 않는다 — 판례 없이 진행하도록 빈 결과를 준다', async () => {
     const matcher = {
       findMatches: () =>

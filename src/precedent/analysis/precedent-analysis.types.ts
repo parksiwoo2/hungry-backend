@@ -65,6 +65,11 @@ export interface AnalysisTargetLegalContext {
 export interface PrecedentAnalysisTarget {
   targetText: string;
   legalContext: AnalysisTargetLegalContext;
+  /**
+   * 선택. crime_types 에 거는 정규식(예: "공갈|강요"). 맞는 쟁점만 후보로 하고,
+   * 하나도 없으면 필터 없이 다시 찾는다.
+   */
+  crimeTypePattern?: string;
 }
 
 export interface PrecedentMatchRequest {
