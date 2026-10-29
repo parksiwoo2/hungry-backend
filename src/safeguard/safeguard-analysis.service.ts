@@ -438,6 +438,20 @@ export class SafeguardAnalysisService {
       return list.filter((x) => allowed.has(String(x)));
     };
     if ('patterns' in v) v.patterns = keep(v.patterns, PATTERN_SET, '패턴');
+    // 1차의 후보 유형 — 검색 범위일 뿐이라 정의 밖 값은 조용히 버리고 구간은 남긴다
+    if (Array.isArray(v.segments)) {
+      for (const seg of v.segments as unknown[]) {
+        if (!seg || typeof seg !== 'object') continue;
+        const item = seg as Record<string, unknown>;
+        if ('candidateTypes' in item) {
+          item.candidateTypes = keep(
+            item.candidateTypes,
+            HARM_SET,
+            '후보 유형',
+          );
+        }
+      }
+    }
     if (Array.isArray(v.judged)) {
       v.judged = v.judged.filter((j: unknown) => {
         if (!j || typeof j !== 'object') return true; // 스키마 검증에 맡김

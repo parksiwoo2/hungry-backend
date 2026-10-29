@@ -290,4 +290,23 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
       ),
     ).rejects.toThrow(/1차 선별 출력이 토큰 한도.*잘림/);
   });
+
+  it('dropInvalidEnumValues: 1차 candidateTypes 의 enum 밖 값도 걷어낸다 (실측: "강요"로 분석 전체가 실패)', () => {
+    const engine = new SafeguardAnalysisService(new NoopPrecedentProvider());
+    type Drop = (label: string, v: unknown) => unknown;
+    const priv = engine as unknown as { dropInvalidEnumValues: Drop };
+    const drop: Drop = (label, v) => priv.dropInvalidEnumValues(label, v);
+
+    const out = drop('1차 선별', {
+      segments: [
+        { messageNos: [1], candidateTypes: ['강요', '협박', '공갈'] },
+        { messageNos: [2], candidateTypes: ['모욕'] },
+      ],
+      patterns: ['떼카', '카톡감옥'],
+    }) as { segments: { candidateTypes: string[] }[]; patterns: string[] };
+
+    expect(out.segments[0].candidateTypes).toEqual(['협박']);
+    expect(out.segments[1].candidateTypes).toEqual(['모욕']);
+    expect(out.patterns).toEqual(['떼카']);
+  });
 });
