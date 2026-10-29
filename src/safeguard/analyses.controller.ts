@@ -3,7 +3,7 @@
  *   GET    /analyses?limit=&offset=       내 분석 목록 (최신순)
  *   GET    /analyses/:analysisId          분석 결과 (의심 구간·패턴·집계·판례)
  *   DELETE /analyses/:analysisId          분석 삭제
- *   GET    /analyses/:analysisId/report   정리 문서 PDF (?legal=false 면 법조 없이 사실만)
+ *   GET    /analyses/:analysisId/report   정리 문서 PDF (사실·AI 근거·조문·참고 판례·절차)
  */
 import {
   Body,

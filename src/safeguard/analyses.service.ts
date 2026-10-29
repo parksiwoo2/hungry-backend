@@ -19,6 +19,10 @@ import {
   type Summary,
 } from './safeguard-analysis.service';
 import { ReportPdfService } from './report-pdf.service';
+import {
+  PRECEDENT_PROVIDER,
+  type PrecedentProvider,
+} from './precedent-provider';
 import { SessionsService } from './sessions.service';
 import {
   SAFEGUARD_STORE,
@@ -113,6 +117,7 @@ export class AnalysesService {
     private readonly engine: SafeguardAnalysisService,
     private readonly sessions: SessionsService,
     private readonly pdf: ReportPdfService,
+    @Inject(PRECEDENT_PROVIDER) private readonly precedents: PrecedentProvider,
   ) {}
 
   /**
@@ -244,8 +249,8 @@ export class AnalysesService {
   }
 
   /**
-   * 정리 문서 PDF. 제외(excluded)된 구간은 빼고, 집계는 남은 구간으로 다시 센다.
-   * legal=false 면 법조·판례·대응 절차 없이 사실 정리만 싣는다.
+   * 정리 문서 PDF — 한 종류. 제외(excluded)된 구간은 빼고, 집계는 남은 구간으로 다시 센다.
+   * 참고 판례는 저장하지 않고 생성 시점에 어댑터에서 읽는다 (조회 실패면 판례 없이 만든다).
    */
   async report(id: string, legal: boolean, userId: string): Promise<Buffer> {
     const a = await this.store.getAnalysis(id, userId);
@@ -264,14 +269,18 @@ export class AnalysesService {
       victimName: a.victimName,
       victimInRoom: true,
     };
+    const precedentIds = [
+      ...new Set(flagged.flatMap((f) => f.appliedPrecedentIds)),
+    ];
+    const precedents = await this.precedents.describe(precedentIds);
     const pdf = await this.pdf.generate({
       input,
       result: { flagged, patterns: a.patterns },
       summary: this.engine.aggregate(flagged, session.messages),
-      legal,
+      precedents,
     });
     this.logger.log(
-      `정리 문서 생성 ${id} — ${(pdf.length / 1024).toFixed(0)}KB · ${flagged.length}건 · legal=${legal}`,
+      `정리 문서 생성 ${id} — ${(pdf.length / 1024).toFixed(0)}KB · ${flagged.length}건 · 판례 ${precedents.length}건`,
     );
     return pdf;
   }

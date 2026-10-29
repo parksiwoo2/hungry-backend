@@ -82,11 +82,25 @@ export function anonymizeInput(input: AnalyzeInput): {
   };
 }
 
-/** AI 출력 문자열의 가명을 실명으로 되돌린다 (문서 생성 직전에 사용) */
+/**
+ * AI 출력 문자열의 가명을 실명으로 되돌린다 (문서 생성 직전에 사용).
+ *
+ * 모델이 "학생K"를 "K"로 줄여 쓰는 일이 잦아("지우·K·B가"), 매핑에 있는 글자가
+ * 구분자·조사·괄호 사이에 홀로 서 있으면 그것도 되돌린다. 영단어 속 글자("AI")나
+ * 숫자·하이픈에 붙은 글자("1002-B")는 건드리지 않는다.
+ */
 export function deanonymize(text: string, map: PseudonymMap): string {
   let out = text;
   for (const [pseudo, name] of Object.entries(map)) {
     out = out.replace(new RegExp(escapeRe(pseudo), 'g'), name);
+  }
+  for (const [pseudo, name] of Object.entries(map)) {
+    const letter = pseudo.replace(/^학생/, '');
+    if (!/^[A-Z]$/.test(letter)) continue;
+    out = out.replace(
+      new RegExp(`(?<![A-Za-z0-9가-힣-])${letter}(?![A-Za-z0-9-])`, 'g'),
+      name,
+    );
   }
   return out;
 }

@@ -14,14 +14,20 @@
  * 임계값은 두지 않는다. 무관한 판례를 버리는 것은 2차 프롬프트의 몫이다.
  */
 import { Injectable, Logger } from '@nestjs/common';
+import { DataSource } from 'typeorm';
 import { PrecedentMatchService } from '../precedent/search/precedent-match.service';
-import { PrecedentStoreService } from '../precedent/storage/precedent-store.service';
+import {
+  PrecedentStoreService,
+  type StoredPrecedentDetail,
+} from '../precedent/storage/precedent-store.service';
 import type { PrecedentMatch } from '../precedent/analysis/precedent-analysis.types';
 import type {
   AnalysisTarget,
+  PrecedentDetail,
   PrecedentMatchInput,
   PrecedentMatchOutput,
   PrecedentProvider,
+  PrecedentRuling,
 } from './precedent-provider';
 
 /** 검색 모듈(PrecedentMatchService.validateRequest)의 입력 제한 */
@@ -30,6 +36,29 @@ const MAX_TARGET_TEXT = 5000;
 const MAX_AUDIENCE = 100_000;
 /** 사전 한 줄의 요지 길이 — 프로토타입 판례 풀(pipeline.mjs)과 같은 형식 */
 const MAX_GIST = 200;
+/** 문서에 싣는 "법원이 다룬 발언" 개수 */
+const MAX_QUOTES = 3;
+
+/**
+ * 팀 분석 테이블(precedent_analysis_issues ⋈ precedent_issue_findings) 한 행.
+ * 팀 서비스에 조회 메서드가 없어 읽기 전용 SQL로 직접 본다.
+ */
+export interface IssueRow {
+  precedent_id: string;
+  issue_order: number;
+  evidence_texts: string[];
+  finding_order: number | null;
+  court_name: string | null;
+  is_guilty_recognized: boolean | null;
+}
+
+const ISSUE_SQL = `
+  SELECT i.precedent_id, i.issue_order, i.evidence_texts,
+         f.finding_order, f.court_name, f.is_guilty_recognized
+  FROM precedent_analysis_issues i
+  LEFT JOIN precedent_issue_findings f ON f.issue_id = i.id
+  WHERE i.precedent_id = ANY($1)
+  ORDER BY i.precedent_id, i.issue_order, f.finding_order`;
 
 @Injectable()
 export class VectorPrecedentProvider implements PrecedentProvider {
@@ -38,6 +67,7 @@ export class VectorPrecedentProvider implements PrecedentProvider {
   constructor(
     private readonly matcher: PrecedentMatchService,
     private readonly store: PrecedentStoreService,
+    private readonly db: DataSource,
   ) {}
 
   async match(input: PrecedentMatchInput): Promise<PrecedentMatchOutput> {
@@ -54,6 +84,72 @@ export class VectorPrecedentProvider implements PrecedentProvider {
         })),
       };
     }
+  }
+
+  async describe(ids: string[]): Promise<PrecedentDetail[]> {
+    if (ids.length === 0) return [];
+    try {
+      const rows = await this.db.query<IssueRow[]>(ISSUE_SQL, [ids]);
+      const out: PrecedentDetail[] = [];
+      for (const id of ids) {
+        const d = await this.detail(
+          id,
+          rows.filter((r) => r.precedent_id === id),
+        );
+        if (d) out.push(d);
+      }
+      return out;
+    } catch (e) {
+      const message = e instanceof Error ? e.message : String(e);
+      this.logger.warn(
+        `판례 상세 조회 실패 — 문서에 판례 없이 진행: ${message}`,
+      );
+      return [];
+    }
+  }
+
+  /** 원문(저장소)과 결론·인용 발언(분석 테이블)을 합친다. 사건번호 없으면 null */
+  private async detail(
+    id: string,
+    rows: IssueRow[],
+  ): Promise<PrecedentDetail | null> {
+    let stored: StoredPrecedentDetail;
+    try {
+      stored = await this.store.findOne(id);
+    } catch {
+      return null;
+    }
+    const caseNumber = stored.caseNumber?.trim();
+    if (!caseNumber) return null;
+
+    const source = stored.summary?.trim() || stored.gist?.trim() || '';
+    const quotedTexts: string[] = [];
+    for (const r of rows) {
+      for (const t of r.evidence_texts ?? []) {
+        const text = t.trim();
+        if (text && !quotedTexts.includes(text)) quotedTexts.push(text);
+      }
+    }
+    // 결론은 첫 쟁점의 심급 흐름만 — 쟁점마다 결론이 달라 섞으면 읽을 수 없다
+    const firstIssue = rows.length ? rows[0].issue_order : null;
+    const rulings: PrecedentRuling[] = rows
+      .filter((r) => r.issue_order === firstIssue && r.court_name)
+      .map((r) => ({
+        court: r.court_name!.trim(),
+        guilty: r.is_guilty_recognized,
+      }));
+
+    return {
+      id,
+      caseNumber,
+      court: stored.courtName?.trim() || null,
+      caseName: stored.caseName?.trim() || null,
+      decidedOn: formatDate(stored.judgementDate),
+      summary: source ? firstItem(source) : null,
+      refLaws: stored.refLaws?.trim() || null,
+      quotedTexts: quotedTexts.slice(0, MAX_QUOTES),
+      rulings,
+    };
   }
 
   private async search(
@@ -141,4 +237,12 @@ export class VectorPrecedentProvider implements PrecedentProvider {
 function firstItem(text: string): string {
   const m = text.match(/\[1\]([\s\S]*?)(?=\[2\]|$)/);
   return (m ? m[1] : text).replace(/\s+/g, ' ').trim().slice(0, MAX_GIST);
+}
+
+/** 법령 API의 선고일 "20220728" → "2022-07-28". 형식이 다르면 그대로 */
+function formatDate(raw: string | null): string | null {
+  const d = raw?.trim();
+  if (!d) return null;
+  const m = d.match(/^(\d{4})(\d{2})(\d{2})$/);
+  return m ? `${m[1]}-${m[2]}-${m[3]}` : d;
 }

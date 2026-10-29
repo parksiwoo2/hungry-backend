@@ -2,6 +2,7 @@ import {
   SafeguardAnalysisService,
   AnalyzeInput,
 } from './safeguard-analysis.service';
+import { z } from 'zod';
 import { parseKakao } from './kakao-parser';
 import {
   NoopPrecedentProvider,
@@ -117,7 +118,6 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
       inp,
       { flagged: [...flagged] as never, patterns: [] },
       svc.aggregate([...flagged] as never, inp.messages),
-      true,
     );
     expect(doc).toContain(
       '■ 2026-07-18T23:50 ~ 2026-07-18T23:59 · 정태오 (메시지 3개)',
@@ -127,6 +127,56 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
     expect(doc).toContain('스토킹처벌법 제18조');
     // 1:1이라 협박은 그대로 형법 283조 (공연성 불요)
     expect(doc).toContain('형법 제283조');
+    // 문서는 한 종류 — 조문과 AI 근거가 같은 항목에 같이 나온다
+    expect(doc).toContain('· AI 판단 근거: 연속 전송');
+    expect(doc).toContain('· AI 판단 근거: 해악 고지');
+  });
+
+  it('buildDocument: 참고 판례가 있으면 사건·결론·인용 발언을 적고 없으면 그 절이 없다', () => {
+    const inp = input();
+    const flagged = [
+      {
+        messageNos: [6],
+        harmTypes: ['협박'],
+        severity: '즉시조치',
+        reason: '해악 고지',
+        appliedPrecedentIds: ['227693'],
+      },
+    ] as const;
+    const summary = svc.aggregate([...flagged] as never, inp.messages);
+    const precedent = {
+      id: '227693',
+      caseNumber: '2022도4171',
+      court: '대법원',
+      caseName: '정통망법위반(명예훼손)',
+      decidedOn: '2022-07-28',
+      summary: '비방할 목적의 의미',
+      refLaws: '정보통신망법 제70조 제1항',
+      quotedTexts: ['너희들도 조심해라.'],
+      rulings: [
+        { court: '대구지방법원 (원심)', guilty: true },
+        { court: '대법원', guilty: false },
+      ],
+    };
+
+    const withP = svc.buildDocument(
+      inp,
+      { flagged: [...flagged] as never, patterns: [] },
+      summary,
+      [precedent],
+    );
+    expect(withP).toContain('[참고 판례');
+    expect(withP).toContain('■ 대법원 2022. 7. 28. 선고 2022도4171 판결');
+    expect(withP).toContain('결론: 대구지방법원 (원심) 유죄 → 대법원 무죄');
+    expect(withP).toContain('"너희들도 조심해라."');
+    expect(withP).toContain('관련 구간: 2026-07-19T00:07 · 정태오');
+
+    const without = svc.buildDocument(
+      inp,
+      { flagged: [...flagged] as never, patterns: [] },
+      summary,
+    );
+    expect(without).not.toContain('참고 판례');
   });
 
   it('detectSystemPatterns: 다중 초대 대상에 피해자가 있어도 방폭을 센다', () => {
@@ -168,6 +218,7 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
             matchedPrecedentIds: ['2006도546'],
           })),
         }),
+      describe: () => Promise.resolve([]),
     };
     const engine = new SafeguardAnalysisService(provider);
     jest.spyOn(engine, 'screen').mockResolvedValue({
@@ -192,5 +243,41 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
     const r = await engine.analyze(input());
 
     expect(r.flagged[0].appliedPrecedentIds).toEqual(['2006도546']);
+  });
+
+  it('buildDocument: 확정 구간이 없으면 기간 자리에 undefined 가 아니라 "확인된 피해 없음"이 나온다', () => {
+    const inp = input();
+    const empty = svc.aggregate([], inp.messages);
+    const doc = svc.buildDocument(inp, { flagged: [], patterns: [] }, empty);
+    expect(doc).not.toContain('undefined');
+    expect(doc).toContain('확인된 피해가 없습니다');
+    expect(doc).not.toMatch(/~ .*기간 동안/);
+  });
+
+  it('callStructured: 출력이 토큰 한도에서 잘리면 JSON 파싱 오류 대신 한도 초과를 알린다', async () => {
+    // 데모12(277건) 실측 — 1차 출력이 8000 토큰에서 끊겨 "Unterminated string in JSON"으로 실패했다
+    const engine = new SafeguardAnalysisService(new NoopPrecedentProvider());
+    (engine as unknown as { _client: unknown })._client = {
+      messages: {
+        create: () =>
+          Promise.resolve({
+            stop_reason: 'max_tokens',
+            content: [{ type: 'text', text: '{"segments":[{"summary":"잘린' }],
+          }),
+      },
+    };
+    type Call = (...a: unknown[]) => Promise<unknown>;
+    const priv = engine as unknown as { callStructured: Call };
+    const call: Call = (...a) => priv.callStructured(...a);
+
+    await expect(
+      call(
+        '1차 선별',
+        z.object({ segments: z.array(z.object({ summary: z.string() })) }),
+        's',
+        'c',
+        'low',
+      ),
+    ).rejects.toThrow(/1차 선별 출력이 토큰 한도.*잘림/);
   });
 });
