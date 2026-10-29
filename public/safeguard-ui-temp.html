@@ -470,7 +470,7 @@ $("dlPdf").addEventListener("click", async () => {
   if (!state.analysis) return;
   toast("정리 문서를 만들고 있어요…");
   try {
-    const res = await fetch("/analyses/" + encodeURIComponent(state.analysis.analysisId) + "/report");
+    const res = await fetch("/analyses/" + encodeURIComponent(state.analysis.analysisId) + "/report?legal=true");
     if (!res.ok) throw new Error("문서 생성에 실패했어요 (" + res.status + ")");
     download(await res.blob(), "피해정리문서.pdf");
     toast("정리 문서를 저장했어요");
