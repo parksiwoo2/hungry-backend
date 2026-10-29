@@ -3,6 +3,7 @@ import type { Request, Response } from 'express';
 import { LoginDto, SignupDto } from './dto/users.dto';
 import { SessionService } from './session.service';
 import { UsersService } from './users.service';
+import { Public } from './auth.guard';
 
 @Controller('auth')
 export class AuthController {
@@ -12,11 +13,13 @@ export class AuthController {
   ) {}
 
   @Post('signup')
+  @Public()
   signup(@Body() input: SignupDto) {
     return this.users.create(input);
   }
 
   @Post('login')
+  @Public()
   @HttpCode(200)
   async login(
     @Body() input: LoginDto,
@@ -29,6 +32,7 @@ export class AuthController {
   }
 
   @Post('logout')
+  @Public()
   @HttpCode(204)
   logout(
     @Req() request: Request,

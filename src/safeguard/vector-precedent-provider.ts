@@ -27,7 +27,7 @@ import type {
   PrecedentMatchInput,
   PrecedentMatchOutput,
   PrecedentProvider,
-  PrecedentRuling,
+  PrecedentIssueDetail,
 } from './precedent-provider';
 
 /** 검색 모듈(PrecedentMatchService.validateRequest)의 입력 제한 */
@@ -36,7 +36,7 @@ const MAX_TARGET_TEXT = 5000;
 const MAX_AUDIENCE = 100_000;
 /** 사전 한 줄의 요지 길이 — 프로토타입 판례 풀(pipeline.mjs)과 같은 형식 */
 const MAX_GIST = 200;
-/** 문서에 싣는 "법원이 다룬 발언" 개수 */
+/** 쟁점별로 문서에 싣는 인용 발언 개수 */
 const MAX_QUOTES = 3;
 
 /**
@@ -146,21 +146,28 @@ export class VectorPrecedentProvider implements PrecedentProvider {
     if (!caseNumber) return null;
 
     const source = stored.summary?.trim() || stored.gist?.trim() || '';
-    const quotedTexts: string[] = [];
+    const issues = new Map<number, PrecedentIssueDetail>();
     for (const r of rows) {
-      for (const t of r.evidence_texts ?? []) {
-        const text = t.trim();
-        if (text && !quotedTexts.includes(text)) quotedTexts.push(text);
+      let issue = issues.get(r.issue_order);
+      if (!issue) {
+        issue = { issueOrder: r.issue_order, quotedTexts: [], rulings: [] };
+        issues.set(r.issue_order, issue);
       }
+      for (const text of r.evidence_texts ?? []) {
+        const quote = text.trim();
+        if (
+          quote &&
+          !issue.quotedTexts.includes(quote) &&
+          issue.quotedTexts.length < MAX_QUOTES
+        )
+          issue.quotedTexts.push(quote);
+      }
+      if (r.court_name?.trim())
+        issue.rulings.push({
+          court: r.court_name.trim(),
+          guilty: r.is_guilty_recognized,
+        });
     }
-    // 결론은 첫 쟁점의 심급 흐름만 — 쟁점마다 결론이 달라 섞으면 읽을 수 없다
-    const firstIssue = rows.length ? rows[0].issue_order : null;
-    const rulings: PrecedentRuling[] = rows
-      .filter((r) => r.issue_order === firstIssue && r.court_name)
-      .map((r) => ({
-        court: r.court_name!.trim(),
-        guilty: r.is_guilty_recognized,
-      }));
 
     return {
       id,
@@ -170,8 +177,7 @@ export class VectorPrecedentProvider implements PrecedentProvider {
       decidedOn: formatDate(stored.judgementDate),
       summary: source ? firstItem(source) : null,
       refLaws: stored.refLaws?.trim() || null,
-      quotedTexts: quotedTexts.slice(0, MAX_QUOTES),
-      rulings,
+      issues: [...issues.values()].sort((a, b) => a.issueOrder - b.issueOrder),
     };
   }
 

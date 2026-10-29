@@ -1,3 +1,4 @@
+import type { PrecedentAnalysisIssue } from './precedent-analysis.types';
 import {
   buildFactEmbeddingText,
   buildRuleEmbeddingText,
@@ -7,7 +8,7 @@ import {
 
 describe('precedent embedding text', () => {
   it('쟁점의 실제 증거 텍스트와 작성 맥락만 임베딩 텍스트로 만든다', () => {
-    const issue = {
+    const issue: PrecedentAnalysisIssue = {
       evidenceType: 'group_chat_message',
       evidenceTexts: ['첫 번째 문제 발언', '두 번째 문제 발언'],
       factPattern: '8인 단체 대화방에서 피해자를 모욕하였다.',
@@ -32,7 +33,7 @@ describe('precedent embedding text', () => {
           specificityRecognized: true,
         },
       ],
-    } as const;
+    };
     const text = buildFactEmbeddingText(issue);
 
     expect(text).toContain(
@@ -45,7 +46,7 @@ describe('precedent embedding text', () => {
   });
 
   it('통합 요약과 법리를 서로 다른 임베딩 텍스트로 만든다', () => {
-    const issue = {
+    const issue: PrecedentAnalysisIssue = {
       evidenceType: 'social_post',
       evidenceTexts: ['허위 게시물'],
       factPattern: '온라인 게시판에 글을 게시하였다.',
@@ -71,7 +72,7 @@ describe('precedent embedding text', () => {
           specificityRecognized: true,
         },
       ],
-    } as const;
+    };
 
     expect(buildSummaryEmbeddingText(issue)).toBe(issue.searchSummary);
     expect(buildRuleEmbeddingText(issue)).toContain('일반화된 법리');

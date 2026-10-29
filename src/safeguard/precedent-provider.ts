@@ -59,6 +59,12 @@ export interface PrecedentRuling {
  * 요지·참조조문·인용 발언은 판례 원문이고, rulings 만 팀 분석 테이블의 결론 플래그다.
  * AI가 쓴 사실관계·판단 요약 문장은 넣지 않는다 — 문서에 판례 설명처럼 인쇄되면 안 된다.
  */
+export interface PrecedentIssueDetail {
+  issueOrder: number;
+  quotedTexts: string[];
+  rulings: PrecedentRuling[];
+}
+
 export interface PrecedentDetail {
   id: string;
   caseNumber: string;
@@ -69,9 +75,8 @@ export interface PrecedentDetail {
   /** 판시사항 첫 항목 (없으면 판결요지) — 2차 사전과 같은 원문 */
   summary: string | null;
   refLaws: string | null;
-  /** 법원이 다룬 발언 — 판결문에서 인용된 원문 */
-  quotedTexts: string[];
-  rulings: PrecedentRuling[];
+  /** 발언과 판단을 같은 쟁점 안에서만 연결한다. */
+  issues: PrecedentIssueDetail[];
 }
 
 export interface PrecedentProvider {
@@ -98,7 +103,8 @@ export class NoopPrecedentProvider implements PrecedentProvider {
     });
   }
 
-  describe(): Promise<PrecedentDetail[]> {
+  describe(_ids: string[]): Promise<PrecedentDetail[]> {
+    void _ids;
     return Promise.resolve([]);
   }
 }

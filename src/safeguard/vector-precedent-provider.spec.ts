@@ -208,13 +208,13 @@ describe('VectorPrecedentProvider — 팀 판례 검색을 우리 계약으로 �
     const matcher = {
       findMatches: () =>
         Promise.reject(
-          new Error('SECRET_KEY 환경 변수가 설정되지 않았습니다.'),
+          new Error('SECRET_KEY_SEARCH 환경 변수가 설정되지 않았습니다.'),
         ),
     } as unknown as PrecedentMatchService;
     const provider = new VectorPrecedentProvider(
       matcher,
       {} as PrecedentStoreService,
-      {} as DataSource,
+      { query: jest.fn().mockResolvedValue([]) } as unknown as DataSource,
     );
 
     const out = await provider.match({ analysisTargets: [target('1')] });
@@ -226,6 +226,18 @@ describe('VectorPrecedentProvider — 팀 판례 검색을 우리 계약으로 �
   });
 
   describe('describe — 정리 문서에 실을 판례 상세', () => {
+    it('SQL 조회 실패는 빈 결과로 처리하고 저장소를 호출하지 않는다', async () => {
+      const query = jest.fn().mockRejectedValue(new Error('SQL 장애'));
+      const findOne = jest.fn();
+      const provider = new VectorPrecedentProvider(
+        {} as PrecedentMatchService,
+        { findOne } as unknown as PrecedentStoreService,
+        { query } as unknown as DataSource,
+      );
+      await expect(provider.describe(['227693'])).resolves.toEqual([]);
+      expect(query).toHaveBeenCalledTimes(1);
+      expect(findOne).not.toHaveBeenCalled();
+    });
     const row = (over: Partial<IssueRow>): IssueRow => ({
       precedent_id: '227693',
       issue_order: 1,
@@ -256,7 +268,7 @@ describe('VectorPrecedentProvider — 팀 판례 검색을 우리 계약으로 �
             court_name: '대법원',
             is_guilty_recognized: false,
           }),
-          // 두 번째 쟁점 — 발언은 더하고, 결론은 첫 쟁점 것만 쓴다
+          // 두 번째 쟁점의 발언과 결론은 첫 번째 쟁점과 분리한다
           row({
             issue_order: 2,
             evidence_texts: ['두 번째 발언', '너희들도 조심해라.'],
@@ -278,10 +290,20 @@ describe('VectorPrecedentProvider — 팀 판례 검색을 우리 계약으로 �
           decidedOn: '2022-07-28',
           summary: '비방할 목적의 의미',
           refLaws: '[1] 정보통신망법 제70조 제1항',
-          quotedTexts: ['너희들도 조심해라.', '두 번째 발언'],
-          rulings: [
-            { court: '대구지방법원 (원심)', guilty: true },
-            { court: '대법원', guilty: false },
+          issues: [
+            {
+              issueOrder: 1,
+              quotedTexts: ['너희들도 조심해라.'],
+              rulings: [
+                { court: '대구지방법원 (원심)', guilty: true },
+                { court: '대법원', guilty: false },
+              ],
+            },
+            {
+              issueOrder: 2,
+              quotedTexts: ['두 번째 발언', '너희들도 조심해라.'],
+              rulings: [{ court: '대법원', guilty: null }],
+            },
           ],
         },
       ]);
@@ -297,19 +319,20 @@ describe('VectorPrecedentProvider — 팀 판례 검색을 우리 계약으로 �
       const out = await provider.describe(['4', '1', '2', '3']);
 
       expect(out.map((d) => d.id)).toEqual(['4', '3']);
-      expect(out[0]).toMatchObject({ quotedTexts: [], rulings: [] });
+      expect(out[0]).toMatchObject({ issues: [] });
     });
 
     it('조회가 실패하면 빈 목록 — 문서 생성이 판례 때문에 막히지 않는다', async () => {
+      const findOne = jest.fn().mockRejectedValue(new Error('저장소 장애'));
+      const query = jest.fn().mockResolvedValue([]);
       const provider = new VectorPrecedentProvider(
         {} as PrecedentMatchService,
-        {
-          findOne: () => Promise.reject(new Error('DB 장애')),
-        } as unknown as PrecedentStoreService,
-        {} as DataSource,
+        { findOne } as unknown as PrecedentStoreService,
+        { query } as unknown as DataSource,
       );
-
       await expect(provider.describe(['227693'])).resolves.toEqual([]);
+      expect(query).toHaveBeenCalledTimes(1);
+      expect(findOne).toHaveBeenCalledWith('227693');
     });
   });
 });

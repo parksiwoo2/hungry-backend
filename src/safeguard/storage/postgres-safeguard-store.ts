@@ -6,6 +6,7 @@
  * 배열·객체는 json 컬럼이다. pg 드라이버는 JS 배열을 Postgres 배열 리터럴로 바꾸므로
  * 반드시 JSON.stringify 한 문자열을 $n::json 으로 넘긴다. 읽을 때는 드라이버가 파싱해 준다.
  */
+import { NotFoundException } from '@nestjs/common';
 import type { DataSource } from 'typeorm';
 import {
   newId,
@@ -87,7 +88,7 @@ export class PostgresSafeguardStore implements SafeguardStore {
 
   // ── 세션 ─────────────────────────────────────────────────────────
 
-  async createSession(s: NewSession): Promise<SessionRecord> {
+  async createSession(s: NewSession, userId: string): Promise<SessionRecord> {
     const rec: SessionRecord = {
       ...s,
       id: newId('ses'),
@@ -96,8 +97,8 @@ export class PostgresSafeguardStore implements SafeguardStore {
     await this.db.query(
       `INSERT INTO safeguard_sessions
          (id, source, format, messages, message_count, system_event_count,
-          participants, period_from, period_to, created_at)
-       VALUES ($1, $2, $3, $4::json, $5, $6, $7::json, $8, $9, $10)`,
+          participants, period_from, period_to, created_at, user_id)
+       VALUES ($1, $2, $3, $4::json, $5, $6, $7::json, $8, $9, $10, $11)`,
       [
         rec.id,
         rec.source,
@@ -109,35 +110,36 @@ export class PostgresSafeguardStore implements SafeguardStore {
         rec.period?.from ?? null,
         rec.period?.to ?? null,
         rec.createdAt,
+        userId,
       ],
     );
     return rec;
   }
 
-  async getSession(id: string): Promise<SessionRecord | null> {
+  async getSession(id: string, userId: string): Promise<SessionRecord | null> {
     const rows = await this.db.query<SessionRow[]>(
-      'SELECT * FROM safeguard_sessions WHERE id = $1',
-      [id],
+      'SELECT * FROM safeguard_sessions WHERE id = $1 AND user_id = $2',
+      [id, userId],
     );
     return rows[0] ? this.toSession(rows[0]) : null;
   }
 
-  async analysisIdsForSession(id: string): Promise<string[]> {
+  async analysisIdsForSession(id: string, userId: string): Promise<string[]> {
     const rows = await this.db.query<{ analysis_id: string }[]>(
       `SELECT l.analysis_id
          FROM safeguard_analysis_sessions l
          JOIN safeguard_analyses a ON a.id = l.analysis_id
-        WHERE l.session_id = $1
+        WHERE l.session_id = $1 AND a.user_id = $2
         ORDER BY a.seq`,
-      [id],
+      [id, userId],
     );
     return rows.map((r) => r.analysis_id);
   }
 
-  async deleteSession(id: string): Promise<boolean> {
+  async deleteSession(id: string, userId: string): Promise<boolean> {
     const rows = await this.db.query<{ id: string }[]>(
-      'WITH deleted AS (DELETE FROM safeguard_sessions WHERE id = $1 RETURNING id) SELECT id FROM deleted',
-      [id],
+      'WITH deleted AS (DELETE FROM safeguard_sessions WHERE id = $1 AND user_id = $2 RETURNING id) SELECT id FROM deleted',
+      [id, userId],
     );
     return rows.length > 0;
   }
@@ -161,7 +163,10 @@ export class PostgresSafeguardStore implements SafeguardStore {
 
   // ── 분석 ─────────────────────────────────────────────────────────
 
-  async createAnalysis(a: NewAnalysis): Promise<AnalysisRecord> {
+  async createAnalysis(
+    a: NewAnalysis,
+    userId: string,
+  ): Promise<AnalysisRecord> {
     const rec: AnalysisRecord = {
       ...a,
       id: newId('ana'),
@@ -174,16 +179,23 @@ export class PostgresSafeguardStore implements SafeguardStore {
       finishedAt: null,
     };
     await this.db.transaction(async (tx) => {
+      const owned = await tx.query<{ id: string }[]>(
+        'SELECT id FROM safeguard_sessions WHERE id = ANY($1::text[]) AND user_id = $2 FOR SHARE',
+        [a.sessionIds, userId],
+      );
+      if (!a.sessionIds.length || owned.length !== new Set(a.sessionIds).size)
+        throw new NotFoundException('세션 없음');
       await tx.query(
         `INSERT INTO safeguard_analyses
-           (id, context, victim_name, participant_count, status, created_at)
-         VALUES ($1, $2, $3, $4, 'running', $5)`,
+           (id, context, victim_name, participant_count, status, created_at, user_id)
+         VALUES ($1, $2, $3, $4, 'running', $5, $6)`,
         [
           rec.id,
           rec.context,
           rec.victimName,
           rec.participantCount,
           rec.createdAt,
+          userId,
         ],
       );
       for (const [ord, sessionId] of rec.sessionIds.entries()) {
@@ -246,10 +258,13 @@ export class PostgresSafeguardStore implements SafeguardStore {
     );
   }
 
-  async getAnalysis(id: string): Promise<AnalysisWithUtterances | null> {
+  async getAnalysis(
+    id: string,
+    userId: string,
+  ): Promise<AnalysisWithUtterances | null> {
     const rows = await this.db.query<AnalysisRow[]>(
-      `${ANALYSIS_SELECT} WHERE a.id = $1`,
-      [id],
+      `${ANALYSIS_SELECT} WHERE a.id = $1 AND a.user_id = $2`,
+      [id, userId],
     );
     if (!rows[0]) return null;
     const utterances = await this.db.query<UtteranceRow[]>(
@@ -265,6 +280,7 @@ export class PostgresSafeguardStore implements SafeguardStore {
   async listAnalyses(
     limit: number,
     offset: number,
+    userId: string,
   ): Promise<AnalysisListItem[]> {
     const rows = await this.db.query<
       (AnalysisRow & { utterance_count: number; urgent_count: number })[]
@@ -274,10 +290,10 @@ export class PostgresSafeguardStore implements SafeguardStore {
                 WHERE u.analysis_id = x.id) AS utterance_count,
               (SELECT COUNT(*)::int FROM safeguard_utterances u
                 WHERE u.analysis_id = x.id AND u.severity = '즉시조치') AS urgent_count
-         FROM (${ANALYSIS_SELECT}) x
+         FROM (${ANALYSIS_SELECT} WHERE a.user_id = $3) x
         ORDER BY x.created_at DESC, x.seq DESC
         LIMIT $1 OFFSET $2`,
-      [limit, offset],
+      [limit, offset, userId],
     );
     return rows.map((r) => ({
       ...this.toAnalysis(r),
@@ -286,10 +302,10 @@ export class PostgresSafeguardStore implements SafeguardStore {
     }));
   }
 
-  async deleteAnalysis(id: string): Promise<boolean> {
+  async deleteAnalysis(id: string, userId: string): Promise<boolean> {
     const rows = await this.db.query<{ id: string }[]>(
-      'WITH deleted AS (DELETE FROM safeguard_analyses WHERE id = $1 RETURNING id) SELECT id FROM deleted',
-      [id],
+      'WITH deleted AS (DELETE FROM safeguard_analyses WHERE id = $1 AND user_id = $2 RETURNING id) SELECT id FROM deleted',
+      [id, userId],
     );
     return rows.length > 0;
   }

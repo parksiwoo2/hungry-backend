@@ -2,10 +2,11 @@
  * 세션 → 분석 → 조회 → PDF 전체 흐름. AI 엔진(analyze)만 스텁으로 바꾸고
  * 저장소는 PostgreSQL 임시 스키마, PDF 생성기는 스텁이다.
  *
- * AppModule 이 아니라 SafeguardModule 만 올린다 — AppModule 은 Postgres 연결이 있어야 뜬다.
- * 운영 인프라(Postgres 저장소 · 판례 벡터 검색)는 SafeguardInfraModule 한곳에 모여 있어
- * 그 모듈만 테스트용으로 갈아 끼우면 DB·외부 API 없이 라우트·검증·저장 흐름을 본다.
+ * UsersModule의 실제 세션 인증과 PostgreSQL 저장소를 사용한다.
+ * 외부 AI·판례 매칭만 대체하고 두 사용자의 소유권 차단을 HTTP로 검증한다.
  */
+import { createHash } from 'node:crypto';
+import { UsersModule } from '../src/users/users.module';
 import { Test, TestingModule } from '@nestjs/testing';
 import { Global, Injectable, INestApplication, Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -31,6 +32,8 @@ import {
   ReportPdfService,
   type ReportInput,
 } from './../src/safeguard/report-pdf.service';
+
+jest.setTimeout(60_000);
 
 const RAW = [
   '2학년 3반 단톡 님과 카카오톡 대화',
@@ -66,12 +69,16 @@ const STUB_RESULT = {
 
 describe('Safeguard API (e2e)', () => {
   let app: INestApplication<App>;
+  let owner: ReturnType<typeof request.agent>;
+  let other: ReturnType<typeof request.agent>;
+  let db: DataSource;
   let close: (() => Promise<void>) | undefined;
   let generatePdf: jest.SpyInstance<Promise<Buffer>, [ReportInput]>;
 
   beforeAll(async () => {
     const opened = await openTestDatabase();
     close = opened.close;
+    db = opened.db;
     const store = new PostgresSafeguardStore(opened.db);
 
     @Global()
@@ -95,8 +102,7 @@ describe('Safeguard API (e2e)', () => {
               decidedOn: '2003-05-13',
               summary: '공갈죄의 수단으로서 협박의 의미',
               refLaws: '형법 제350조',
-              quotedTexts: [],
-              rulings: [],
+              issues: [],
             })),
         );
       }
@@ -124,6 +130,7 @@ describe('Safeguard API (e2e)', () => {
       imports: [
         ConfigModule.forRoot({ isGlobal: true, ignoreEnvFile: true }),
         TestDatabaseModule,
+        UsersModule,
         SafeguardModule,
         OutsideModule,
         ActionsModule,
@@ -143,6 +150,15 @@ describe('Safeguard API (e2e)', () => {
     app = moduleFixture.createNestApplication();
     app.useGlobalPipes(buildValidationPipe());
     await app.init();
+    owner = request.agent(app.getHttpServer());
+    other = request.agent(app.getHttpServer());
+    for (const [client, email, nickName] of [
+      [owner, 'owner@test.com', 'owner'],
+      [other, 'other@test.com', 'other'],
+    ] as const) {
+      await client.post('/auth/signup').send({ email, nickName }).expect(201);
+      await client.post('/auth/login').send({ email }).expect(200);
+    }
 
     // jest(CommonJS)는 puppeteer(ESM) 동적 import 를 못 한다 — PDF 생성기만 스텁, 라우트·헤더는 실제
     generatePdf = jest
@@ -165,23 +181,119 @@ describe('Safeguard API (e2e)', () => {
     }
   });
 
+  it('인증 없는 기능 요청과 만료·변조 세션은 401', async () => {
+    const anonymous = request(app.getHttpServer());
+    for (const path of [
+      '/',
+      '/analyses',
+      '/analyses/unknown',
+      '/analyses/unknown/report',
+      '/analyses/unknown/actions',
+      '/sessions/unknown',
+    ]) {
+      await anonymous.get(path).expect(401);
+    }
+    for (const path of [
+      '/sessions',
+      '/analyses',
+      '/chats/intro',
+      '/chats/messages',
+    ]) {
+      await anonymous.post(path).send({}).expect(401);
+    }
+    await anonymous.delete('/analyses/unknown').expect(401);
+    await anonymous.delete('/sessions/unknown').expect(401);
+    await anonymous
+      .get('/analyses')
+      .set('Cookie', 'hungry.sid=bad')
+      .expect(401);
+    await db.query(
+      `INSERT INTO user_sessions (token_hash,user_id,expires_at)
+      SELECT $1,id,now()-interval '1 day' FROM users WHERE email='owner@test.com'`,
+      [createHash('sha256').update('b'.repeat(64)).digest('hex')],
+    );
+    await anonymous
+      .get('/analyses')
+      .set('Cookie', `hungry.sid=${'b'.repeat(64)}`)
+      .expect(401);
+  });
+
+  it('로그아웃 후 같은 쿠키로 접근할 수 없다', async () => {
+    const client = request.agent(app.getHttpServer());
+    const login = await client
+      .post('/auth/login')
+      .send({ email: 'other@test.com' })
+      .expect(200);
+    const cookies = login.headers['set-cookie'] as unknown as string[];
+    await client.post('/auth/logout').expect(204);
+    await request(app.getHttpServer())
+      .get('/analyses')
+      .set('Cookie', cookies.map((c) => c.split(';')[0]).join(';'))
+      .expect(401);
+  });
+
+  it('소유자 없는 기존 자료·분석·상담은 누구에게도 노출되지 않는다', async () => {
+    const upload = await owner
+      .post('/sessions')
+      .send({ rawText: RAW })
+      .expect(201);
+    const sid = (upload.body as { sessionId: string }).sessionId;
+    const stream = await owner
+      .post('/analyses')
+      .send({ sessionIds: [sid], context: 'small_group', victimName: '윤아' })
+      .expect(201);
+    const result = JSON.parse(stream.text.trim().split('\n').at(-1)!) as {
+      analysisId: string;
+    };
+    const aid = result.analysisId;
+    const intro = await owner
+      .post('/chats/intro')
+      .send({ analysisId: aid })
+      .expect(200);
+    const cid = (intro.body as { sessionId: string }).sessionId;
+    await db.query(
+      'UPDATE safeguard_sessions SET user_id = NULL WHERE id = $1',
+      [sid],
+    );
+    await db.query(
+      'UPDATE safeguard_analyses SET user_id = NULL WHERE id = $1',
+      [aid],
+    );
+    for (const client of [owner, other]) {
+      await client.get(`/sessions/${sid}`).expect(404);
+      await client.get(`/analyses/${aid}`).expect(404);
+      await client.get(`/analyses/${aid}/report`).expect(404);
+      await client.get(`/analyses/${aid}/actions`).expect(404);
+      await client.delete(`/sessions/${sid}`).expect(404);
+      await client.delete(`/analyses/${aid}`).expect(404);
+      await client.post('/chats/intro').send({ analysisId: aid }).expect(404);
+      await client
+        .post('/chats/messages')
+        .send({ sessionId: cid, userMessage: '접근' })
+        .expect(404);
+      const list = await client.get('/analyses').expect(200);
+      expect(
+        (list.body as { analyses: { analysisId: string }[] }).analyses.map(
+          (a) => a.analysisId,
+        ),
+      ).not.toContain(aid);
+    }
+  });
+
   it('GET / — UI 페이지를 서빙한다', () => {
-    return request(app.getHttpServer())
-      .get('/')
-      .expect(200)
-      .expect('Content-Type', /html/);
+    return owner.get('/').expect(200).expect('Content-Type', /html/);
   });
 
   describe('sessions', () => {
     it('POST — 파싱 불가 원문은 400', () => {
-      return request(app.getHttpServer())
+      return owner
         .post('/sessions')
         .send({ rawText: '아무 형식도 아닌 텍스트' })
         .expect(400);
     });
 
     it('POST → GET → DELETE', async () => {
-      const created = await request(app.getHttpServer())
+      const created = await owner
         .post('/sessions')
         .send({ rawText: RAW })
         .expect(201);
@@ -200,28 +312,24 @@ describe('Safeguard API (e2e)', () => {
       const id = (created.body as { sessionId: string }).sessionId;
       expect(id).toMatch(/^ses_/);
 
-      const got = await request(app.getHttpServer())
-        .get(`/sessions/${id}`)
-        .expect(200);
+      const got = await owner.get(`/sessions/${id}`).expect(200);
       expect((got.body as { sessionId: string }).sessionId).toBe(id);
       expect(got.body).not.toHaveProperty('messages');
 
-      await request(app.getHttpServer()).delete(`/sessions/${id}`).expect(204);
-      await request(app.getHttpServer()).get(`/sessions/${id}`).expect(404);
+      await owner.delete(`/sessions/${id}`).expect(204);
+      await owner.get(`/sessions/${id}`).expect(404);
     });
   });
 
   describe('analyses', () => {
     let sessionId: string;
     beforeAll(async () => {
-      const r = await request(app.getHttpServer())
-        .post('/sessions')
-        .send({ rawText: RAW });
+      const r = await owner.post('/sessions').send({ rawText: RAW });
       sessionId = (r.body as { sessionId: string }).sessionId;
     });
 
     it('POST — 잘못된 context는 400 (스트림 열기 전), message는 노션 명세의 한 문장', async () => {
-      const res = await request(app.getHttpServer())
+      const res = await owner
         .post('/analyses')
         .send({
           sessionIds: [sessionId],
@@ -235,11 +343,11 @@ describe('Safeguard API (e2e)', () => {
     });
 
     it('POST — 없는 세션은 404, 참여자가 아닌 피해자는 400', async () => {
-      await request(app.getHttpServer())
+      await owner
         .post('/analyses')
         .send({ sessionIds: ['ses_none'], context: 'dm', victimName: '윤아' })
         .expect(404);
-      await request(app.getHttpServer())
+      await owner
         .post('/analyses')
         .send({
           sessionIds: [sessionId],
@@ -253,7 +361,7 @@ describe('Safeguard API (e2e)', () => {
       jest
         .spyOn(app.get(SafeguardAnalysisService), 'analyze')
         .mockRejectedValueOnce(new Error('test AI unavailable'));
-      const res = await request(app.getHttpServer())
+      const res = await owner
         .post('/analyses')
         .send({
           sessionIds: [sessionId],
@@ -271,25 +379,18 @@ describe('Safeguard API (e2e)', () => {
         message: 'test AI unavailable',
       });
       const id = last.analysisId as string;
-      const saved = await request(app.getHttpServer())
-        .get(`/analyses/${id}`)
-        .expect(200);
+      const saved = await owner.get(`/analyses/${id}`).expect(200);
       expect(saved.body).toMatchObject({
         status: 'error',
         error: 'test AI unavailable',
       });
-      await request(app.getHttpServer())
-        .get(`/analyses/${id}/report`)
-        .expect(409);
-      await request(app.getHttpServer())
-        .post('/chats/intro')
-        .send({ analysisId: id })
-        .expect(409);
-      await request(app.getHttpServer()).delete(`/analyses/${id}`).expect(204);
+      await owner.get(`/analyses/${id}/report`).expect(409);
+      await owner.post('/chats/intro').send({ analysisId: id }).expect(409);
+      await owner.delete(`/analyses/${id}`).expect(204);
     });
 
     it('POST 스트리밍 → GET → 목록 → 세션 삭제 409 → PDF → DELETE', async () => {
-      const res = await request(app.getHttpServer())
+      const res = await owner
         .post('/analyses')
         .send({
           sessionIds: [sessionId],
@@ -346,16 +447,12 @@ describe('Safeguard API (e2e)', () => {
       });
       expect(utterances[0].utteranceId).toMatch(/^utt_/);
 
-      const got = await request(app.getHttpServer())
-        .get(`/analyses/${analysisId}`)
-        .expect(200);
+      const got = await owner.get(`/analyses/${analysisId}`).expect(200);
       expect(got.body).toEqual(
         result.type === 'result' ? { ...result, type: undefined } : {},
       );
 
-      const list = await request(app.getHttpServer())
-        .get('/analyses?limit=5')
-        .expect(200);
+      const list = await owner.get('/analyses?limit=5').expect(200);
       // 노션 명세: 배열을 그대로 주지 않고 { analyses: [...] } 로 감싼다
       const { analyses } = list.body as { analyses: unknown[] };
       expect(Array.isArray(list.body)).toBe(false);
@@ -367,20 +464,49 @@ describe('Safeguard API (e2e)', () => {
         patterns: ['셔틀'],
       });
 
-      const cards = await request(app.getHttpServer())
+      const cards = await owner
         .get(`/analyses/${analysisId}/actions`)
         .expect(200);
       expect(
         (cards.body as { actions: { id: string }[] }).actions.map((a) => a.id),
       ).toEqual(result.actionIds);
 
-      const intro = await request(app.getHttpServer())
+      const intro = await owner
         .post('/chats/intro')
         .send({ analysisId })
         .expect(200);
       const chatId = (intro.body as { sessionId: string }).sessionId;
       expect(chatId).toMatch(/^[a-f0-9-]{36}$/);
-      await request(app.getHttpServer())
+      const otherList = await other.get('/analyses').expect(200);
+      expect(otherList.body).toEqual({ analyses: [] });
+      for (const path of [
+        `/sessions/${sessionId}`,
+        `/analyses/${analysisId}`,
+        `/analyses/${analysisId}/report`,
+        `/analyses/${analysisId}/actions`,
+      ]) {
+        await other.get(path).expect(404);
+      }
+      await other.delete(`/sessions/${sessionId}`).expect(404);
+      await other.delete(`/analyses/${analysisId}`).expect(404);
+      await other
+        .post('/analyses')
+        .send({
+          sessionIds: [sessionId],
+          context: 'small_group',
+          victimName: '윤아',
+        })
+        .expect(404);
+      await other.post('/chats/intro').send({ analysisId }).expect(404);
+      await other
+        .post('/chats/messages')
+        .send({ sessionId: chatId, userMessage: '타인의 상담 접근' })
+        .expect(404);
+      await owner
+        .post('/sessions')
+        .send({ rawText: RAW, userId: 'forged-owner' })
+        .expect(400);
+      await owner
         .post('/chats/messages')
         .send({ sessionId: chatId, userMessage: '친구 때문에 속상해요' })
         .expect(200)
@@ -391,21 +517,17 @@ describe('Safeguard API (e2e)', () => {
           fallback: false,
         });
 
-      const conflict = await request(app.getHttpServer())
-        .delete(`/sessions/${sessionId}`)
-        .expect(409);
+      const conflict = await owner.delete(`/sessions/${sessionId}`).expect(409);
       expect((conflict.body as { analysisIds: string[] }).analysisIds).toEqual([
         analysisId,
       ]);
 
-      const session = await request(app.getHttpServer())
-        .get(`/sessions/${sessionId}`)
-        .expect(200);
+      const session = await owner.get(`/sessions/${sessionId}`).expect(200);
       expect((session.body as { analysisIds: string[] }).analysisIds).toEqual([
         analysisId,
       ]);
 
-      const pdf = await request(app.getHttpServer())
+      const pdf = await owner
         .get(`/analyses/${analysisId}/report`)
         .buffer()
         .parse((res, cb) => {
@@ -426,28 +548,16 @@ describe('Safeguard API (e2e)', () => {
         expect.objectContaining({ id: '2003도709', caseNumber: '2003도709' }),
       ]);
 
-      await request(app.getHttpServer())
-        .delete(`/analyses/${analysisId}`)
-        .expect(204);
-      await request(app.getHttpServer())
-        .delete(`/analyses/${analysisId}`)
-        .expect(404);
-      await request(app.getHttpServer())
+      await owner.delete(`/analyses/${analysisId}`).expect(204);
+      await owner.delete(`/analyses/${analysisId}`).expect(404);
+      await owner
         .post('/chats/messages')
         .send({ sessionId: chatId, userMessage: '삭제 후 요청' })
         .expect(404);
-      await request(app.getHttpServer())
-        .get(`/analyses/${analysisId}/actions`)
-        .expect(404);
-      await request(app.getHttpServer())
-        .get(`/analyses/${analysisId}`)
-        .expect(404);
-      await request(app.getHttpServer())
-        .get(`/analyses/${analysisId}/report`)
-        .expect(404);
-      await request(app.getHttpServer())
-        .delete(`/sessions/${sessionId}`)
-        .expect(204);
+      await owner.get(`/analyses/${analysisId}/actions`).expect(404);
+      await owner.get(`/analyses/${analysisId}`).expect(404);
+      await owner.get(`/analyses/${analysisId}/report`).expect(404);
+      await owner.delete(`/sessions/${sessionId}`).expect(204);
     }, 60_000);
   });
 });

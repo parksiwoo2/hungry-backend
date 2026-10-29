@@ -2,6 +2,7 @@
  * 컨트롤러 계층 — 라우트·검증·상태 코드만 본다. 서비스는 스텁으로 갈아 끼운다
  * (저장소·LLM 흐름은 chats.service.spec.ts).
  */
+import type { Request, Response, NextFunction } from 'express';
 import { INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import request from 'supertest';
@@ -26,6 +27,16 @@ describe('ChatsController', () => {
     }).compile();
     app = moduleRef.createNestApplication();
     app.useGlobalPipes(buildValidationPipe());
+    app.use(
+      (
+        req: Request & { userId?: string },
+        _res: Response,
+        next: NextFunction,
+      ) => {
+        req.userId = 'test-user';
+        next();
+      },
+    );
     await app.init();
   });
 
@@ -49,7 +60,7 @@ describe('ChatsController', () => {
       .send({ analysisId: 'ana_1' })
       .expect(200)
       .expect({ sessionId: SESSION_ID, greeting: '안녕' });
-    expect(service.intro).toHaveBeenCalledWith('ana_1');
+    expect(service.intro).toHaveBeenCalledWith('ana_1', 'test-user');
   });
 
   it('POST /chats/intro — analysisId 가 없으면 400', async () => {
@@ -71,7 +82,11 @@ describe('ChatsController', () => {
       .post('/chats/messages')
       .send({ sessionId: SESSION_ID, userMessage: '  불안해요  ' })
       .expect(200);
-    expect(service.sendMessage).toHaveBeenCalledWith(SESSION_ID, '불안해요');
+    expect(service.sendMessage).toHaveBeenCalledWith(
+      SESSION_ID,
+      '불안해요',
+      'test-user',
+    );
   });
 
   it.each([

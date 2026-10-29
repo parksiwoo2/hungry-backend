@@ -33,8 +33,8 @@ describe('deanonymize — AI 출력의 가명을 실명으로 되돌린다', () 
   it('anonymizeInput 의 매핑으로 왕복하면 원래 이름이 돌아온다', () => {
     const { input, map: m } = anonymizeInput({
       messages: [
-        { no: 1, time: '2026-10-01 10:00', sender: '지우', text: '하준 봐라' },
-        { no: 2, time: '2026-10-01 10:01', sender: '하준', text: 'ㅇㅇ' },
+        { time: '2026-10-01 10:00', sender: '지우', text: '하준 봐라' },
+        { time: '2026-10-01 10:01', sender: '하준', text: 'ㅇㅇ' },
       ],
       context: 'small_group',
       participantCount: 3,
