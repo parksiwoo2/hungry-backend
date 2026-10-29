@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { PrecedentAnalysisModule } from './analysis/precedent-analysis.module';
 import { PrecedentExternalModule } from './external/precedent-external.module';
-import { PrecedentController } from './precedent.controller';
+import { PrecedentsController } from './precedents.controller';
 import { PrecedentSearchModule } from './search/precedent-search.module';
 import { PrecedentStorageModule } from './storage/precedent-storage.module';
 
@@ -12,7 +12,7 @@ import { PrecedentStorageModule } from './storage/precedent-storage.module';
     PrecedentAnalysisModule,
     PrecedentSearchModule,
   ],
-  controllers: [PrecedentController],
+  controllers: [PrecedentsController],
   exports: [PrecedentExternalModule, PrecedentAnalysisModule],
 })
-export class PrecedentModule {}
+export class PrecedentsModule {}

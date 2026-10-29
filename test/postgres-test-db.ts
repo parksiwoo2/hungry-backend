@@ -1,4 +1,7 @@
 import { User } from '../src/users/entities/user.entity';
+import { PrecedentEntity } from '../src/precedents/entities/precedent.entity';
+import { PrecedentAnalysisIssueEntity } from '../src/precedents/entities/precedent-analysis-issue.entity';
+import { PrecedentIssueFindingEntity } from '../src/precedents/entities/precedent-issue-finding.entity';
 import { CreateUsers20260922000000 } from '../src/migrations/20260922000000-create-users';
 import { AddDataOwners20261029000000 } from '../src/migrations/20261029000000-add-data-owners';
 import { randomUUID } from 'node:crypto';
@@ -24,7 +27,14 @@ export async function openTestDatabase() {
     ...options,
     schema,
     extra: { options: `-c search_path=${schema}` },
-    entities: [ChatSession, ChatMessage, User],
+    entities: [
+      ChatSession,
+      ChatMessage,
+      User,
+      PrecedentEntity,
+      PrecedentAnalysisIssueEntity,
+      PrecedentIssueFindingEntity,
+    ],
     migrations: [
       CreateUsers20260922000000,
       CreateSafeguardTables20261005000000,

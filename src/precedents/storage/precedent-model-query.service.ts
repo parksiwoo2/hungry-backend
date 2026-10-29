@@ -1,6 +1,10 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import type { EntityTarget, ObjectLiteral } from 'typeorm';
-import { DataSource } from 'typeorm';
+import { DataSource, In } from 'typeorm';
 import { PrecedentAnalysisIssueEntity } from '../entities/precedent-analysis-issue.entity';
 import { PrecedentAnalysisEntity } from '../entities/precedent-analysis.entity';
 import { PrecedentIssueEmbeddingEntity } from '../entities/precedent-issue-embedding.entity';
@@ -79,6 +83,34 @@ const MODEL_CONFIGS: Record<PrecedentModelName, ModelConfig> = {
 @Injectable()
 export class PrecedentModelQueryService {
   constructor(private readonly dataSource: DataSource) {}
+
+  async findDetail(precedentId: string) {
+    if (!/^\d+$/.test(precedentId)) {
+      throw new BadRequestException('precedentId는 숫자 문자열이어야 합니다.');
+    }
+    const precedent = await this.dataSource
+      .getRepository(PrecedentEntity)
+      .findOneBy({ externalId: precedentId });
+    if (!precedent) throw new NotFoundException('저장된 판례가 없습니다.');
+    const issues = await this.dataSource
+      .getRepository(PrecedentAnalysisIssueEntity)
+      .find({ where: { precedentId }, order: { issueOrder: 'ASC' } });
+    const findings = issues.length
+      ? await this.dataSource.getRepository(PrecedentIssueFindingEntity).find({
+          where: { issueId: In(issues.map((issue) => issue.id)) },
+          order: { findingOrder: 'ASC' },
+        })
+      : [];
+    return {
+      precedent,
+      issues: issues.map((issue) => ({
+        ...issue,
+        courtFindings: findings.filter(
+          (finding) => finding.issueId === issue.id,
+        ),
+      })),
+    };
+  }
 
   async findAll(model: string, options: ModelQueryOptions) {
     if (!PRECEDENT_MODEL_NAMES.includes(model as PrecedentModelName)) {

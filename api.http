@@ -30,7 +30,7 @@ Content-Type: application/json
 
 ### 1. 자연어·키워드 하이브리드 검색 (201)
 # 검색어를 임베딩하므로 OpenAI 연결이 필요합니다. 다음 페이지는 offset을 10씩 늘립니다.
-POST {{baseUrl}}/precedent/search
+POST {{baseUrl}}/precedents/search
 Content-Type: application/json
 
 {
@@ -39,9 +39,9 @@ Content-Type: application/json
   "offset": 0
 }
 
-### 2. 외부 API 판례 상세 조회 (200)
+### 2. 저장 판례·쟁점·법원 판단 상세 조회 (200)
 # precedentId는 사건번호가 아닌 국가법령정보센터 판례 일련번호입니다.
-GET {{baseUrl}}/precedent/{{precedentId}}
+GET {{baseUrl}}/precedents/{{precedentId}}
 
 ### 3. 카카오톡 내보내기 원문 업로드·파싱 (201)
 # @name uploadSession

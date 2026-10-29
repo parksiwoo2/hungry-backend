@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { AddDataOwners20261029000000 } from './migrations/20261029000000-add-data-owners';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { PrecedentModule } from './precedent/precedent.module';
+import { PrecedentsModule } from './precedents/precedents.module';
 import { EnsurePrecedentSchema20260816000000 } from './migrations/20260816000000-ensure-precedent-schema';
 import { CreatePrecedentAnalyses20260816010000 } from './migrations/20260816010000-create-precedent-analyses';
 import { CreateUsers20260922000000 } from './migrations/20260922000000-create-users';
@@ -38,7 +38,7 @@ import { ChatsModule } from './chats/chats.module';
         migrationsRun: true,
       }),
     }),
-    PrecedentModule,
+    PrecedentsModule,
     UsersModule,
     SafeguardModule,
     ActionsModule,

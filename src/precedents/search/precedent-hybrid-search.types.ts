@@ -53,12 +53,9 @@ export interface PrecedentHybridSearchResult {
   crimeTypes: string[];
   keywords: string[];
   courtFindings: PrecedentCourtFinding[];
-  score: PrecedentHybridSearchScore;
 }
 
 export interface PrecedentHybridSearchResponse {
   query: string;
-  mode: PrecedentSearchMode;
-  filters: PrecedentHybridSearchFilters;
   results: PrecedentHybridSearchResult[];
 }
