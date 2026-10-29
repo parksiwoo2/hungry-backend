@@ -98,7 +98,7 @@ describe('UsersService', () => {
       secretPasswordHash: 'hidden',
     });
     const result = await service.update('id', {
-      maskingIcon: 'NOTE',
+      maskingIcon: MaskingIcon.NOTE,
       secretPassword: '1234@12',
     });
     const changes = repository.update.mock.calls[0][1] as {

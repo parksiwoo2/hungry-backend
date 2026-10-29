@@ -102,8 +102,7 @@ describe('Safeguard API (e2e)', () => {
               decidedOn: '2003-05-13',
               summary: '공갈죄의 수단으로서 협박의 의미',
               refLaws: '형법 제350조',
-              quotedTexts: [],
-              rulings: [],
+              issues: [],
             })),
         );
       }
