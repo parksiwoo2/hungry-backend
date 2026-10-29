@@ -10,8 +10,8 @@ import { DataSource } from 'typeorm';
 import { openTestDatabase } from './postgres-test-db';
 import { EnsurePrecedentSchema20260816000000 } from '../src/migrations/20260816000000-ensure-precedent-schema';
 import { CreatePrecedentAnalyses20260816010000 } from '../src/migrations/20260816010000-create-precedent-analyses';
-import { PrecedentMatchService } from '../src/precedent/search/precedent-match.service';
-import type { OpenAiPrecedentService } from '../src/precedent/analysis/openai-precedent.service';
+import { PrecedentMatchService } from '../src/precedents/search/precedent-match.service';
+import type { OpenAiPrecedentService } from '../src/precedents/analysis/openai-precedent.service';
 
 const unit = (i: number) => {
   const v = Array<number>(1536).fill(0);

@@ -60,8 +60,6 @@ export class PrecedentHybridSearchService {
 
     return {
       query: request.query,
-      mode: request.mode,
-      filters: request.filters,
       results,
     };
   }
@@ -236,15 +234,6 @@ export class PrecedentHybridSearchService {
       crimeTypes: row.crime_types,
       keywords: row.keywords,
       courtFindings: this.parseCourtFindings(row.court_findings),
-      score: {
-        overall: this.roundScore(row.overall_score),
-        vector: this.roundScore(row.vector_score),
-        summary: this.roundScore(row.summary_score),
-        fact: this.roundScore(row.fact_score),
-        rule: this.roundScore(row.rule_score),
-        keyword: this.roundScore(row.keyword_score),
-        exactCaseNumber: this.roundScore(row.exact_case_score),
-      },
     }));
   }
 
@@ -366,9 +355,5 @@ export class PrecedentHybridSearchService {
     return typeof value === 'string'
       ? (JSON.parse(value) as PrecedentCourtFinding[])
       : value;
-  }
-
-  private roundScore(value: number | string): number {
-    return Number(Number(value).toFixed(6));
   }
 }

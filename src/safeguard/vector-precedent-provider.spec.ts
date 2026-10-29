@@ -2,12 +2,12 @@ import { NotFoundException } from '@nestjs/common';
 import type {
   PrecedentMatch,
   PrecedentMatchRequest,
-} from '../precedent/analysis/precedent-analysis.types';
-import type { PrecedentMatchService } from '../precedent/search/precedent-match.service';
+} from '../precedents/analysis/precedent-analysis.types';
+import type { PrecedentMatchService } from '../precedents/search/precedent-match.service';
 import type {
   PrecedentStoreService,
   StoredPrecedentDetail,
-} from '../precedent/storage/precedent-store.service';
+} from '../precedents/storage/precedent-store.service';
 import type { DataSource } from 'typeorm';
 import type { AnalysisTarget } from './precedent-provider';
 import {

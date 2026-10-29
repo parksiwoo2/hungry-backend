@@ -10,8 +10,8 @@
  */
 import { Module } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { PrecedentSearchModule } from '../precedent/search/precedent-search.module';
-import { PrecedentStorageModule } from '../precedent/storage/precedent-storage.module';
+import { PrecedentSearchModule } from '../precedents/search/precedent-search.module';
+import { PrecedentStorageModule } from '../precedents/storage/precedent-storage.module';
 import { PRECEDENT_PROVIDER } from './precedent-provider';
 import { SAFEGUARD_STORE } from './storage/safeguard-store';
 import { PostgresSafeguardStore } from './storage/postgres-safeguard-store';

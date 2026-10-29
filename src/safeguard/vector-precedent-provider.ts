@@ -1,5 +1,5 @@
 /**
- * 판례 매칭의 운영 구현 — 팀 판례 검색 모듈(src/precedent, pgvector)을 우리 계약으로 감싼다.
+ * 판례 매칭의 운영 구현 — 팀 판례 검색 모듈(src/precedents, pgvector)을 우리 계약으로 감싼다.
  *
  * 계약(precedent-provider.ts)과 검색 모듈 사이에서 맞추는 것:
  *   - 검색 모듈은 호출당 구간 10개 · targetText 5000자까지 받는다 → 나눠 호출하고 자른다.
@@ -15,12 +15,12 @@
  */
 import { Injectable, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
-import { PrecedentMatchService } from '../precedent/search/precedent-match.service';
+import { PrecedentMatchService } from '../precedents/search/precedent-match.service';
 import {
   PrecedentStoreService,
   type StoredPrecedentDetail,
-} from '../precedent/storage/precedent-store.service';
-import type { PrecedentMatch } from '../precedent/analysis/precedent-analysis.types';
+} from '../precedents/storage/precedent-store.service';
+import type { PrecedentMatch } from '../precedents/analysis/precedent-analysis.types';
 import type {
   AnalysisTarget,
   PrecedentDetail,

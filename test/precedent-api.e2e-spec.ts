@@ -8,19 +8,18 @@ import { ConfigService } from '@nestjs/config';
 import { HttpService } from '@nestjs/axios';
 import { Test } from '@nestjs/testing';
 import { DataSource } from 'typeorm';
-import { of, throwError } from 'rxjs';
 import request from 'supertest';
 import { App } from 'supertest/types';
 import { openTestDatabase } from './postgres-test-db';
 import { EnsurePrecedentSchema20260816000000 } from '../src/migrations/20260816000000-ensure-precedent-schema';
 import { CreatePrecedentAnalyses20260816010000 } from '../src/migrations/20260816010000-create-precedent-analyses';
-import { PrecedentController } from '../src/precedent/precedent.controller';
-import { PrecedentService } from '../src/precedent/external/precedent.service';
-import { PrecedentHybridSearchService } from '../src/precedent/search/precedent-hybrid-search.service';
-import { PrecedentMatchService } from '../src/precedent/search/precedent-match.service';
-import { PrecedentStoreService } from '../src/precedent/storage/precedent-store.service';
-import { PrecedentModelQueryService } from '../src/precedent/storage/precedent-model-query.service';
-import { OpenAiPrecedentService } from '../src/precedent/analysis/openai-precedent.service';
+import { PrecedentsController } from '../src/precedents/precedents.controller';
+import { PrecedentService } from '../src/precedents/external/precedent.service';
+import { PrecedentHybridSearchService } from '../src/precedents/search/precedent-hybrid-search.service';
+import { PrecedentMatchService } from '../src/precedents/search/precedent-match.service';
+import { PrecedentStoreService } from '../src/precedents/storage/precedent-store.service';
+import { PrecedentModelQueryService } from '../src/precedents/storage/precedent-model-query.service';
+import { OpenAiPrecedentService } from '../src/precedents/analysis/openai-precedent.service';
 
 describe('Precedent HTTP API with PostgreSQL/pgvector', () => {
   let app: INestApplication<App>;
@@ -100,21 +99,21 @@ describe('Precedent HTTP API with PostgreSQL/pgvector', () => {
       }
     }
     const module = await Test.createTestingModule({
-      controllers: [PrecedentController],
+      controllers: [PrecedentsController],
       providers: [
         SessionService,
         { provide: APP_GUARD, useClass: AuthGuard },
         PrecedentService,
         PrecedentHybridSearchService,
+        PrecedentModelQueryService,
         { provide: DataSource, useValue: db },
         { provide: ConfigService, useValue: { get: () => 'test' } },
         { provide: HttpService, useValue: { get: httpGet } },
         { provide: OpenAiPrecedentService, useValue: { createEmbeddings } },
-        ...[
-          PrecedentMatchService,
-          PrecedentStoreService,
-          PrecedentModelQueryService,
-        ].map((provide) => ({ provide, useValue: {} })),
+        ...[PrecedentMatchService, PrecedentStoreService].map((provide) => ({
+          provide,
+          useValue: {},
+        })),
       ],
     }).compile();
     app = module.createNestApplication();
@@ -133,28 +132,28 @@ describe('Precedent HTTP API with PostgreSQL/pgvector', () => {
 
   it('판례 기능도 로그인하지 않으면 401', async () => {
     for (const path of [
-      '/precedent',
-      '/precedent/228541',
-      '/precedent/stored',
-      '/precedent/stored/categories',
-      '/precedent/stored/100',
-      '/precedent/models/issues',
+      '/precedents',
+      '/precedents/228541',
+      '/precedents/stored',
+      '/precedents/stored/categories',
+      '/precedents/stored/100',
+      '/precedents/models/issues',
     ]) {
       await request(app.getHttpServer()).get(path).expect(401);
     }
     await request(app.getHttpServer())
-      .post('/precedent/search')
+      .post('/precedents/search')
       .send({ query: '모욕' })
       .expect(401);
     await request(app.getHttpServer())
-      .post('/precedent/match')
+      .post('/precedents/match')
       .send({})
       .expect(401);
   });
 
   it('검색 SQL, 점수, 판례 중복 제거, 완료 상태 및 offset을 검증한다', async () => {
     const first = await client
-      .post('/precedent/search')
+      .post('/precedents/search')
       .send({ query: '단톡방 모욕', limit: 1 })
       .expect(201);
     expect(first.body).toMatchObject({
@@ -162,18 +161,21 @@ describe('Precedent HTTP API with PostgreSQL/pgvector', () => {
         {
           precedentId: '100',
           issueOrder: 1,
-          score: { vector: 1, keyword: 1, overall: 0.9 },
           courtFindings: [{ evidenceAccepted: true }],
         },
       ],
     });
+    expect(first.body).not.toHaveProperty('mode');
+    expect(first.body).not.toHaveProperty('filters');
+    const firstBody = first.body as { results: Record<string, unknown>[] };
+    expect(firstBody.results[0]).not.toHaveProperty('score');
     const second = await client
-      .post('/precedent/search')
+      .post('/precedents/search')
       .send({ query: '단톡방 모욕', limit: 1, offset: 1 })
       .expect(201);
     expect(second.body).toMatchObject({ results: [{ precedentId: '200' }] });
     const end = await client
-      .post('/precedent/search')
+      .post('/precedents/search')
       .send({ query: '단톡방 모욕', offset: 2 })
       .expect(201);
     expect(end.body).toMatchObject({ results: [] });
@@ -185,38 +187,43 @@ describe('Precedent HTTP API with PostgreSQL/pgvector', () => {
     { query: '모욕', offset: -1 },
   ])('잘못된 검색 입력은 400: %j', async (body) => {
     createEmbeddings.mockClear();
-    await client.post('/precedent/search').send(body).expect(400);
+    await client.post('/precedents/search').send(body).expect(400);
     expect(createEmbeddings).not.toHaveBeenCalled();
   });
 
-  it('판례 상세의 외부 요청 인자와 본문 변환을 검증한다', async () => {
-    httpGet.mockReturnValue(
-      of({
-        data: {
-          PrecService: {
-            판례정보일련번호: '228541',
-            사건번호: '2021도3451',
-            판례내용: '<p>판례 본문</p>',
-          },
-        },
-      }),
-    );
-    const result = await client.get('/precedent/228541').expect(200);
-    expect(result.body).toMatchObject({
-      id: '228541',
-      fullContent: '판례 본문',
+  it('저장 판례와 쟁점별 법원 판단을 반환하고 외부 API는 호출하지 않는다', async () => {
+    httpGet.mockClear();
+    const result = await client.get('/precedents/100').expect(200);
+    const body = result.body as Awaited<
+      ReturnType<PrecedentModelQueryService['findDetail']>
+    >;
+    expect(Object.keys(body).sort()).toEqual(['issues', 'precedent']);
+    expect(body.precedent).toMatchObject({
+      externalId: '100',
+      caseNumber: '2026도100',
     });
-    expect(httpGet).toHaveBeenCalledWith(
-      expect.stringContaining('/lawService.do'),
-      { params: { OC: 'test', target: 'prec', type: 'JSON', ID: 228541 } },
-    );
+    expect(body.precedent).not.toHaveProperty('id');
+    expect(body.issues).toHaveLength(2);
+    expect(
+      body.issues.map((issue: { issueOrder: number }) => issue.issueOrder),
+    ).toEqual([1, 2]);
+    for (const issue of body.issues as Array<{
+      id: string;
+      courtFindings: unknown[];
+    }>) {
+      expect(issue.courtFindings).toEqual([
+        expect.objectContaining({
+          issueId: issue.id,
+          findingOrder: 1,
+          evidenceAccepted: true,
+        }),
+      ]);
+    }
+    expect(httpGet).not.toHaveBeenCalled();
   });
 
-  it('숫자가 아닌 판례 ID는 400, 외부 통신 실패는 502', async () => {
-    await client.get('/precedent/not-a-number').expect(400);
-    httpGet.mockReturnValue(
-      throwError(() => new Error('upstream unavailable')),
-    );
-    await client.get('/precedent/228541').expect(502);
+  it('숫자가 아닌 ID는 400, 없는 저장 판례는 404', async () => {
+    await client.get('/precedents/not-a-number').expect(400);
+    await client.get('/precedents/999999').expect(404);
   });
 });
