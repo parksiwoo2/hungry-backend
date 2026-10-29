@@ -81,35 +81,39 @@ export class SessionsService {
     return participantCount <= 2 ? 'kakao_mobile_dm' : 'kakao_mobile_group';
   }
 
-  create(rawText: string, source?: SessionSource): Promise<SessionRecord> {
-    return this.store.createSession(this.build(rawText, source));
+  create(
+    rawText: string,
+    source: SessionSource | undefined,
+    userId: string,
+  ): Promise<SessionRecord> {
+    return this.store.createSession(this.build(rawText, source), userId);
   }
 
-  async get(id: string): Promise<SessionRecord> {
-    const s = await this.store.getSession(id);
+  async get(id: string, userId: string): Promise<SessionRecord> {
+    const s = await this.store.getSession(id, userId);
     if (!s) throw new NotFoundException('세션 없음');
     return s;
   }
 
-  async getResponse(id: string): Promise<SessionResponse> {
-    const s = await this.get(id);
+  async getResponse(id: string, userId: string): Promise<SessionResponse> {
+    const s = await this.get(id, userId);
     return SessionsService.toResponse(
       s,
-      await this.store.analysisIdsForSession(id),
+      await this.store.analysisIdsForSession(id, userId),
     );
   }
 
   /** 분석이 이 세션을 쓰고 있으면 409 — 분석을 먼저 지워야 한다 */
-  async remove(id: string): Promise<void> {
-    await this.get(id);
-    const analysisIds = await this.store.analysisIdsForSession(id);
+  async remove(id: string, userId: string): Promise<void> {
+    await this.get(id, userId);
+    const analysisIds = await this.store.analysisIdsForSession(id, userId);
     if (analysisIds.length > 0) {
       throw new ConflictException({
         message: '분석에 사용 중인 세션',
         analysisIds,
       });
     }
-    await this.store.deleteSession(id);
+    await this.store.deleteSession(id, userId);
   }
 
   static toResponse(s: SessionRecord, analysisIds: string[]): SessionResponse {

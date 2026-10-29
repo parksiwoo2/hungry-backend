@@ -876,18 +876,20 @@ export class SafeguardAnalysisService {
           .join(' / ');
         const lines = [`■ ${title}`];
         if (p.caseName) lines.push(`  ${p.caseName}`);
-        if (p.rulings.length) {
-          lines.push(
-            `  · 결론: ${p.rulings
-              .map(
-                (r) =>
-                  `${r.court} ${r.guilty === null ? '판단 없음' : r.guilty ? '유죄' : '무죄'}`,
-              )
-              .join(' → ')}`,
-          );
+        for (const issue of p.issues) {
+          lines.push(`  · 쟁점 ${issue.issueOrder}`);
+          for (const q of issue.quotedTexts)
+            lines.push(`    법원이 다룬 발언: "${q}"`);
+          if (issue.rulings.length)
+            lines.push(
+              `    추출된 유죄 인정 여부: ${issue.rulings
+                .map(
+                  (r) =>
+                    `${r.court} ${r.guilty === null ? '판단 정보 없음' : r.guilty ? '유죄 인정' : '유죄 인정 안 됨'}`,
+                )
+                .join(' → ')}`,
+            );
         }
-        for (const q of p.quotedTexts)
-          lines.push(`  · 법원이 다룬 발언: "${q}"`);
         if (p.summary) lines.push(`  · 판시사항: ${p.summary}`);
         if (p.refLaws) lines.push(`  · 참조조문: ${p.refLaws}`);
         if (related) lines.push(`  · 관련 구간: ${related}`);

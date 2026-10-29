@@ -13,6 +13,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { SessionsService } from './sessions.service';
+import { CurrentUserId } from '../users/auth.guard';
 import { CreateSessionDto } from './dto/session.dto';
 
 @Controller('sessions')
@@ -20,19 +21,22 @@ export class SessionsController {
   constructor(private readonly sessions: SessionsService) {}
 
   @Post()
-  async create(@Body() dto: CreateSessionDto) {
-    const s = await this.sessions.create(dto.rawText, dto.source);
+  async create(@Body() dto: CreateSessionDto, @CurrentUserId() userId: string) {
+    const s = await this.sessions.create(dto.rawText, dto.source, userId);
     return SessionsService.toResponse(s, []);
   }
 
   @Get(':sessionId')
-  get(@Param('sessionId') id: string) {
-    return this.sessions.getResponse(id);
+  get(@Param('sessionId') id: string, @CurrentUserId() userId: string) {
+    return this.sessions.getResponse(id, userId);
   }
 
   @Delete(':sessionId')
   @HttpCode(204)
-  async remove(@Param('sessionId') id: string) {
-    await this.sessions.remove(id);
+  async remove(
+    @Param('sessionId') id: string,
+    @CurrentUserId() userId: string,
+  ) {
+    await this.sessions.remove(id, userId);
   }
 }

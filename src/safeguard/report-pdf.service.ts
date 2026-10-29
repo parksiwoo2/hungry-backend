@@ -328,17 +328,14 @@ ${this.renderTracks(isDm, trackNo)}
         .map((f) => this.itemLabel(f, messages))
         .join(' / ');
       const rows: string[] = [];
-      if (p.rulings.length) {
-        rows.push(
-          `<dt>결론</dt><dd>${this.esc(this.rulingsLine(p.rulings))}</dd>`,
-        );
-      }
-      if (p.quotedTexts.length) {
-        rows.push(
-          `<dt>법원이 다룬 발언</dt><dd><blockquote>${p.quotedTexts
-            .map((t) => `<div>${this.esc(t)}</div>`)
-            .join('')}</blockquote></dd>`,
-        );
+      for (const issue of p.issues) {
+        const quotes = issue.quotedTexts
+          .map((text) => `<div>${this.esc(text)}</div>`)
+          .join('');
+        rows.push(`<dt>쟁점 ${issue.issueOrder}</dt><dd class="issue">
+          ${quotes ? `<div>법원이 다룬 발언</div><blockquote>${quotes}</blockquote>` : ''}
+          ${issue.rulings.length ? `<div>추출된 유죄 인정 여부: ${this.esc(this.rulingsLine(issue.rulings))}</div>` : ''}
+        </dd>`);
       }
       if (p.summary)
         rows.push(`<dt>판시사항</dt><dd>${this.esc(p.summary)}</dd>`);
@@ -360,7 +357,7 @@ ${blocks.join('\n')}`;
   /** "대구지방법원 (원심) 유죄 → 대법원 무죄" */
   private rulingsLine(rulings: PrecedentRuling[]): string {
     const word = (g: boolean | null) =>
-      g === null ? '판단 없음' : g ? '유죄' : '무죄';
+      g === null ? '판단 정보 없음' : g ? '유죄 인정' : '유죄 인정 안 됨';
     return rulings.map((r) => `${r.court} ${word(r.guilty)}`).join(' → ');
   }
 

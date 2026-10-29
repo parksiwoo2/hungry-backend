@@ -81,8 +81,10 @@ describe('ChatGeminiLlmService [임시]', () => {
 
     const err = await service
       .reply('s', [{ role: 'user', content: 'a' }])
-      .catch((e: unknown) => e as Error);
+      .catch((e: unknown) => e);
 
+    expect(err).toBeInstanceOf(Error);
+    if (!(err instanceof Error)) throw new Error('Expected request failure');
     expect(err.message).toContain('400');
     expect(err.message).not.toContain('test-key');
   });

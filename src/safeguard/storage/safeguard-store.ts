@@ -92,18 +92,25 @@ export interface AnalysisListItem extends AnalysisRecord {
 }
 
 export interface SafeguardStore {
-  createSession(s: NewSession): Promise<SessionRecord>;
-  getSession(id: string): Promise<SessionRecord | null>;
+  createSession(s: NewSession, userId: string): Promise<SessionRecord>;
+  getSession(id: string, userId: string): Promise<SessionRecord | null>;
   /** 세션을 쓰는 분석 ID들 — 삭제 충돌(409) 판단용 */
-  analysisIdsForSession(id: string): Promise<string[]>;
-  deleteSession(id: string): Promise<boolean>;
+  analysisIdsForSession(id: string, userId: string): Promise<string[]>;
+  deleteSession(id: string, userId: string): Promise<boolean>;
 
-  createAnalysis(a: NewAnalysis): Promise<AnalysisRecord>;
+  createAnalysis(a: NewAnalysis, userId: string): Promise<AnalysisRecord>;
   completeAnalysis(id: string, outcome: AnalysisOutcome): Promise<void>;
   failAnalysis(id: string, error: string): Promise<void>;
-  getAnalysis(id: string): Promise<AnalysisWithUtterances | null>;
-  listAnalyses(limit: number, offset: number): Promise<AnalysisListItem[]>;
-  deleteAnalysis(id: string): Promise<boolean>;
+  getAnalysis(
+    id: string,
+    userId: string,
+  ): Promise<AnalysisWithUtterances | null>;
+  listAnalyses(
+    limit: number,
+    offset: number,
+    userId: string,
+  ): Promise<AnalysisListItem[]>;
+  deleteAnalysis(id: string, userId: string): Promise<boolean>;
 }
 
 /** ses_… / ana_… / utt_… — 접두사로 종류가 보이는 불투명 ID */

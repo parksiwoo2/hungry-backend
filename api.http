@@ -1,5 +1,5 @@
 # VS Code REST Client에서 각 요청의 Send Request로 실행합니다.
-# 실행 순서: 업로드 → 분석 → 분석 ID 입력 → 조회/PDF/행동 카드/상담 → 삭제
+# 실행 순서: 회원가입(최초) → 로그인 → 업로드 → 분석 → 분석 ID 입력 → 조회/PDF/행동 카드/상담 → 삭제
 # 검색·분석·상담은 실제 외부 AI를 호출할 수 있습니다.
 @baseUrl = http://localhost:3000
 @precedentId = 228541
@@ -8,6 +8,25 @@
 # 업로드 세션 ID와 상담 세션 ID는 서로 다릅니다.
 @uploadSessionId = {{uploadSession.response.body.$.sessionId}}
 @chatSessionId = {{startChat.response.body.$.sessionId}}
+
+### 최초 회원가입 (이미 가입했다면 생략)
+POST {{baseUrl}}/auth/signup
+Content-Type: application/json
+
+{
+  "email": "demo@example.com",
+  "nickName": "시연사용자"
+}
+
+### 로그인 — REST Client의 쿠키 저장 기능을 활성화하세요
+# 이후 요청에 hungry.sid 쿠키가 전송되어야 합니다.
+# SESSION_COOKIE_SECURE=true 서버는 HTTPS ngrok Base URL로 호출하세요.
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "demo@example.com"
+}
 
 ### 1. 자연어·키워드 하이브리드 검색 (201)
 # 검색어를 임베딩하므로 OpenAI 연결이 필요합니다. 다음 페이지는 offset을 10씩 늘립니다.

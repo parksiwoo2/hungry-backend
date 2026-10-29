@@ -152,10 +152,15 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
       decidedOn: '2022-07-28',
       summary: '비방할 목적의 의미',
       refLaws: '정보통신망법 제70조 제1항',
-      quotedTexts: ['너희들도 조심해라.'],
-      rulings: [
-        { court: '대구지방법원 (원심)', guilty: true },
-        { court: '대법원', guilty: false },
+      issues: [
+        {
+          issueOrder: 1,
+          quotedTexts: ['너희들도 조심해라.'],
+          rulings: [
+            { court: '대구지방법원 (원심)', guilty: true },
+            { court: '대법원', guilty: false },
+          ],
+        },
       ],
     };
 
@@ -167,7 +172,9 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
     );
     expect(withP).toContain('[참고 판례');
     expect(withP).toContain('■ 대법원 2022. 7. 28. 선고 2022도4171 판결');
-    expect(withP).toContain('결론: 대구지방법원 (원심) 유죄 → 대법원 무죄');
+    expect(withP).toContain(
+      '추출된 유죄 인정 여부: 대구지방법원 (원심) 유죄 인정 → 대법원 유죄 인정 안 됨',
+    );
     expect(withP).toContain('"너희들도 조심해라."');
     expect(withP).toContain('관련 구간: 2026-07-19T00:07 · 정태오');
 

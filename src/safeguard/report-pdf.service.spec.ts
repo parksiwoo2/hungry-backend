@@ -25,10 +25,15 @@ const precedent: PrecedentDetail = {
   decidedOn: '2022-07-28',
   summary: '비방할 목적의 의미',
   refLaws: '정보통신망법 제70조 제1항',
-  quotedTexts: ['너희들도 조심해라.'],
-  rulings: [
-    { court: '대구지방법원 (원심)', guilty: true },
-    { court: '대법원', guilty: false },
+  issues: [
+    {
+      issueOrder: 1,
+      quotedTexts: ['너희들도 조심해라.'],
+      rulings: [
+        { court: '대구지방법원 (원심)', guilty: true },
+        { court: '대법원', guilty: false },
+      ],
+    },
   ],
 };
 
@@ -90,7 +95,9 @@ describe('ReportPdfService.buildHtml — 문서 한 종류에 근거·조문·�
     expect(html).toContain('<h2>3. 참고 판례</h2>');
     expect(html).toContain('<h2>4. 병행 가능한 절차</h2>');
     expect(html).toContain('대법원 2022. 7. 28. 선고 2022도4171 판결');
-    expect(html).toContain('대구지방법원 (원심) 유죄 → 대법원 무죄');
+    expect(html).toContain(
+      '대구지방법원 (원심) 유죄 인정 → 대법원 유죄 인정 안 됨',
+    );
     expect(html).toContain('너희들도 조심해라.');
     expect(html).toContain('정보통신망법 제70조 제1항');
     // 이 판례를 참고한 구간 — 첫 구간(10-03 14:22 ~ 14:23)만
@@ -105,15 +112,56 @@ describe('ReportPdfService.buildHtml — 문서 한 종류에 근거·조문·�
     expect(html).toContain('<h2>3. 병행 가능한 절차</h2>');
   });
 
+  it('서로 다른 쟁점의 발언과 판단을 섞지 않고 각각 표시한다', () => {
+    const html = svc.buildHtml(
+      report({
+        precedents: [
+          {
+            ...precedent,
+            issues: [
+              {
+                issueOrder: 1,
+                quotedTexts: ['<첫 발언>'],
+                rulings: [{ court: '첫 법원', guilty: true }],
+              },
+              {
+                issueOrder: 2,
+                quotedTexts: ['두 번째 발언'],
+                rulings: [{ court: '둘째 법원', guilty: false }],
+              },
+            ],
+          },
+        ],
+      }),
+    );
+    const first = html.slice(html.indexOf('쟁점 1'), html.indexOf('쟁점 2'));
+    const second = html.slice(html.indexOf('쟁점 2'));
+    expect(first).toContain('&lt;첫 발언&gt;');
+    expect(first).toContain('첫 법원 유죄 인정');
+    expect(first).not.toContain('둘째 법원');
+    expect(second).toContain('두 번째 발언');
+    expect(second).toContain('둘째 법원 유죄 인정 안 됨');
+    expect(second).not.toContain('첫 법원');
+  });
+
   it('결론 플래그가 없는 심급은 "판단 없음"으로 적는다', () => {
     const html = svc.buildHtml(
       report({
         precedents: [
-          { ...precedent, rulings: [{ court: '서울고등법원', guilty: null }] },
+          {
+            ...precedent,
+            issues: [
+              {
+                issueOrder: 1,
+                quotedTexts: [],
+                rulings: [{ court: '서울고등법원', guilty: null }],
+              },
+            ],
+          },
         ],
       }),
     );
 
-    expect(html).toContain('서울고등법원 판단 없음');
+    expect(html).toContain('서울고등법원 판단 정보 없음');
   });
 });

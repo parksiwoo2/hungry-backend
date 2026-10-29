@@ -34,10 +34,11 @@ export class ActionsService implements OnModuleInit {
    */
   async mapActionsByAnalysis(
     analysisId: string,
+    userId: string,
   ): Promise<{ actions: Action[] }> {
     let analysis: AnalysisResponse;
     try {
-      analysis = await this.analysesService.get(analysisId);
+      analysis = await this.analysesService.get(analysisId, userId);
     } catch (err) {
       if (err instanceof NotFoundException) {
         throw err;

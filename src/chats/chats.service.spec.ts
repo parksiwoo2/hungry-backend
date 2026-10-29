@@ -86,7 +86,7 @@ describe('ChatsService.intro', () => {
     const { service, em, llm } = setup();
     llm.reply.mockResolvedValue({ reply: '윤아님, 반가워요', isCrisis: false });
 
-    const res = await service.intro('ana_1');
+    const res = await service.intro('ana_1', 'test-user');
 
     expect(res).toEqual({
       sessionId: SESSION_ID,
@@ -104,7 +104,7 @@ describe('ChatsService.intro', () => {
     const { service, llm } = setup();
     llm.reply.mockRejectedValue(new Error('boom'));
 
-    const res = await service.intro('ana_1');
+    const res = await service.intro('ana_1', 'test-user');
 
     expect(res.sessionId).toBe(SESSION_ID);
     expect(res.greeting).toContain('윤아님');
@@ -116,7 +116,7 @@ describe('ChatsService.intro', () => {
       analysis: running as unknown as AnalysisResponse,
     });
 
-    await expect(service.intro('ana_1')).rejects.toBeInstanceOf(
+    await expect(service.intro('ana_1', 'test-user')).rejects.toBeInstanceOf(
       ConflictException,
     );
     expect(llm.reply).not.toHaveBeenCalled();
@@ -128,7 +128,7 @@ describe('ChatsService.sendMessage', () => {
   it('없는 세션은 404', async () => {
     const { service } = setup({ session: null });
     await expect(
-      service.sendMessage(SESSION_ID, '안녕'),
+      service.sendMessage(SESSION_ID, '안녕', 'test-user'),
     ).rejects.toBeInstanceOf(NotFoundException);
   });
 
@@ -138,7 +138,7 @@ describe('ChatsService.sendMessage', () => {
     });
 
     const err = await service
-      .sendMessage(SESSION_ID, '안녕')
+      .sendMessage(SESSION_ID, '안녕', 'test-user')
       .catch((e: unknown) => e);
 
     expect(err).toBeInstanceOf(ConflictException);
@@ -152,7 +152,11 @@ describe('ChatsService.sendMessage', () => {
     const { service, em, llm } = setup({ history: HISTORY });
     llm.reply.mockResolvedValue({ reply: '천천히 말해줘요', isCrisis: false });
 
-    const res = await service.sendMessage(SESSION_ID, '내일이 걱정돼요');
+    const res = await service.sendMessage(
+      SESSION_ID,
+      '내일이 걱정돼요',
+      'test-user',
+    );
 
     expect(res).toEqual({
       reply: '천천히 말해줘요',
@@ -181,7 +185,7 @@ describe('ChatsService.sendMessage', () => {
     const { service, llm } = setup({ history: HISTORY });
     llm.reply.mockResolvedValue({ reply: 'ok', isCrisis: false });
 
-    await service.sendMessage(SESSION_ID, '내일이 걱정돼요');
+    await service.sendMessage(SESSION_ID, '내일이 걱정돼요', 'test-user');
 
     const sent = llm.reply.mock.calls[0][1];
     expect(sent.map((m) => m.role)).toEqual([
@@ -197,7 +201,11 @@ describe('ChatsService.sendMessage', () => {
     const { service, em, llm } = setup({ history: HISTORY });
     llm.reply.mockResolvedValue({ reply: '곁에 있을게요', isCrisis: true });
 
-    const res = await service.sendMessage(SESSION_ID, '너무 힘들어요');
+    const res = await service.sendMessage(
+      SESSION_ID,
+      '너무 힘들어요',
+      'test-user',
+    );
 
     expect(res.isCrisis).toBe(true);
     expect(res.emergencyContacts).toEqual(EMERGENCY_CONTACTS);
@@ -212,7 +220,11 @@ describe('ChatsService.sendMessage', () => {
     const { service, em, llm } = setup({ history: HISTORY });
     llm.reply.mockResolvedValue({ reply: '그렇군요', isCrisis: false });
 
-    const res = await service.sendMessage(SESSION_ID, '죽고 싶어요');
+    const res = await service.sendMessage(
+      SESSION_ID,
+      '죽고 싶어요',
+      'test-user',
+    );
 
     expect(res.isCrisis).toBe(true);
     expect(em.update).toHaveBeenCalled();
@@ -222,7 +234,11 @@ describe('ChatsService.sendMessage', () => {
     const { service, em, llm } = setup({ history: HISTORY });
     llm.reply.mockRejectedValue(new Error('boom'));
 
-    const res = await service.sendMessage(SESSION_ID, '자해하고 싶어');
+    const res = await service.sendMessage(
+      SESSION_ID,
+      '자해하고 싶어',
+      'test-user',
+    );
 
     expect(res).toEqual({
       reply: CRISIS_FALLBACK_REPLY,
@@ -237,7 +253,7 @@ describe('ChatsService.sendMessage', () => {
     const { service, dataSource, llm } = setup({ history: HISTORY });
     llm.reply.mockRejectedValue(new Error('boom'));
 
-    const res = await service.sendMessage(SESSION_ID, '안녕');
+    const res = await service.sendMessage(SESSION_ID, '안녕', 'test-user');
 
     expect(res).toEqual({
       reply: FALLBACK_REPLY,
@@ -260,7 +276,7 @@ describe('ChatsService.sendMessage', () => {
     );
 
     await expect(
-      service.sendMessage(SESSION_ID, '안녕'),
+      service.sendMessage(SESSION_ID, '안녕', 'test-user'),
     ).rejects.toBeInstanceOf(ConflictException);
   });
 });
