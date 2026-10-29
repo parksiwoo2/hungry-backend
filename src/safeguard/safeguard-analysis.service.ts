@@ -23,6 +23,7 @@ import { LawRegistry, REMOVAL_TRACK, CIVIL_TRACK } from './law-registry';
 import { PRECEDENT_PROVIDER } from './precedent-provider';
 import type {
   AnalysisTarget,
+  PrecedentDetail,
   PrecedentMatchOutput,
   PrecedentProvider,
 } from './precedent-provider';
@@ -129,6 +130,12 @@ export type FlaggedItem = z.infer<typeof Judged>;
 const HARM_SET = new Set<string>(HarmType.options);
 const PATTERN_SET = new Set<string>(PatternName.options);
 
+/**
+ * AI 출력 토큰 상한. 1차는 구간마다 요약을 쓰므로 대화가 길수록 출력이 는다 —
+ * 데모12(277건·구간 26) 실측에서 8000이면 1차 출력이 잘렸다.
+ */
+const MAX_OUTPUT_TOKENS = 16_000;
+
 // ── 법 조항 매핑 ─────────────────────────────────────────────────────
 // 형량·조문 원문은 law-articles.json(법령 API 수집)에서 읽는다.
 // 유형→조문 매핑과 소추요건은 law-registry.ts (판례 기반, 우리 자산).
@@ -233,6 +240,8 @@ const SYSTEM_JUDGE = `너는 사이버폭력 후보 구간의 2차 판단자다.
 - severity는 구간 단위: 관찰(경미·동조성) / 주의(지목 비하·반복 조짐) /
   즉시조치(해악 고지·금품 요구·성적 내용·신상 언급·거부 의사 후 재접근·패드립·장애 비하)
 - "신고할 정도는 아니다" 같은 판정 표현을 쓰지 마라. 상태만 기술하라.
+- reason에서 사람은 입력에 적힌 가명(학생A, 학생B …)을 그대로 쓰고
+  "A", "K"처럼 한 글자로 줄이지 마라.
 - 이 분석은 참고용이며 법적 판단이 아니다.`;
 
 export interface Summary {
@@ -365,13 +374,19 @@ export class SafeguardAnalysisService {
   ): Promise<z.infer<S>> {
     const response = await this.client.messages.create({
       model: this.config.get<string>('ANALYSIS_MODEL', DEFAULT_MODEL),
-      max_tokens: 8000,
+      max_tokens: MAX_OUTPUT_TOKENS,
       system,
       messages: [{ role: 'user', content }],
       output_config: { format: zodOutputFormat(schema), effort },
     });
     if (response.stop_reason === 'refusal') {
       throw new Error(`${label}이 거부됨(안전 분류). 입력을 확인하세요.`);
+    }
+    if (response.stop_reason === 'max_tokens') {
+      // 잘린 JSON을 파싱하면 "Unterminated string" 같은 오류만 남아 원인을 알 수 없다
+      throw new Error(
+        `${label} 출력이 토큰 한도(${MAX_OUTPUT_TOKENS})에서 잘림 — 대화가 너무 길다. 나눠서 분석하세요.`,
+      );
     }
     const raw = response.content
       .flatMap((b) => (b.type === 'text' ? [b.text] : []))
@@ -731,27 +746,48 @@ export class SafeguardAnalysisService {
     };
   }
 
-  /** 문서 생성(#4). legal=false 판단 근거만 / legal=true 관련 조항·절차 포함 */
+  /**
+   * 개요 첫 문장 — 텍스트 문서와 PDF가 같이 쓴다.
+   * 확정 구간이 없으면 start·end 가 비므로 기간을 쓰지 않는다 ("undefined ~ undefined" 방지).
+   */
+  static leadSentence(summary: Summary): string {
+    if (summary.count === 0 || !summary.start || !summary.end) {
+      return '분석 범위에서 확인된 피해가 없습니다.';
+    }
+    return `${summary.start} ~ ${summary.end} 기간 동안 총 ${summary.count}회의 피해가 확인되었습니다.`;
+  }
+
+  /** 빈 집계는 빈칸 대신 "없음" */
+  static countsLine(counts: Record<string, number>): string {
+    const s = Object.entries(counts)
+      .map(([k, v]) => `${k} ${v}회`)
+      .join(', ');
+    return s || '없음';
+  }
+
+  /**
+   * 문서 생성(#4) — 텍스트판. PDF(report-pdf.service.ts)와 같은 구성:
+   * 요약 → 피해별 항목(인용·유형·정도·AI 판단 근거·관련 조항) → 참고 판례 → 절차.
+   * AI가 쓴 문장은 "AI 판단 근거"로 표시해 사실·조문과 구분한다.
+   */
   buildDocument(
     input: AnalyzeInput,
     result: { flagged: FlaggedItem[]; patterns: string[] },
     summary: Summary,
-    legal = false,
+    precedents: PrecedentDetail[] = [],
   ): string {
     const { messages, context } = input;
     const { flagged, patterns } = result;
     const out: string[] = [];
 
     // [첫 문단 — 요약]
-    const typeSummary = Object.entries(summary.typeCounts)
-      .map(([k, v]) => `${k} ${v}회`)
-      .join(', ');
-    const attackers = Object.entries(summary.attackerCounts)
-      .map(([k, v]) => `${k} ${v}회`)
-      .join(', ');
+    const typeSummary = SafeguardAnalysisService.countsLine(summary.typeCounts);
+    const attackers = SafeguardAnalysisService.countsLine(
+      summary.attackerCounts,
+    );
 
     out.push(
-      `${summary.start} ~ ${summary.end} 기간 동안 총 ${summary.count}회의 피해가 확인되었습니다.`,
+      SafeguardAnalysisService.leadSentence(summary),
       `· 유형별: ${typeSummary}`,
       `· 발신자별: ${attackers}`,
       `· 즉시 조치가 필요한 건: ${summary.urgentCount}건`,
@@ -783,7 +819,8 @@ export class SafeguardAnalysisService {
         `  · 정도: ${f.severity}`,
       ];
 
-      if (legal) {
+      block.push(`  · AI 판단 근거: ${f.reason}`);
+      {
         const isDm = context === 'dm';
         const seenArticle = new Set<string>();
         const seenNotice = new Set<string>();
@@ -809,13 +846,56 @@ export class SafeguardAnalysisService {
             block.push(`    ※ ${r.meta.note}`);
           }
         }
-      } else {
-        block.push(`  · 근거: ${f.reason}`);
       }
       out.push(block.join('\n'), '');
     }
 
-    if (legal) {
+    if (precedents.length > 0) {
+      out.push(
+        '[참고 판례 — AI가 판단 시 참고한 법원 판결입니다. 이 사건에 그대로 적용된다는 뜻은 아닙니다]',
+      );
+      for (const p of precedents) {
+        const title = [
+          p.court,
+          koreanDate(p.decidedOn),
+          '선고',
+          p.caseNumber,
+          '판결',
+        ]
+          .filter(Boolean)
+          .join(' ');
+        const related = flagged
+          .filter((f) => f.appliedPrecedentIds.includes(p.id))
+          .map((f) => {
+            const srcs = f.messageNos.map((no) => messages[no - 1]);
+            const senders = [...new Set(srcs.map((m) => m.sender))].join(', ');
+            return srcs.length === 1
+              ? `${srcs[0].time} · ${senders}`
+              : `${srcs[0].time} ~ ${srcs[srcs.length - 1].time} · ${senders}`;
+          })
+          .join(' / ');
+        const lines = [`■ ${title}`];
+        if (p.caseName) lines.push(`  ${p.caseName}`);
+        if (p.rulings.length) {
+          lines.push(
+            `  · 결론: ${p.rulings
+              .map(
+                (r) =>
+                  `${r.court} ${r.guilty === null ? '판단 없음' : r.guilty ? '유죄' : '무죄'}`,
+              )
+              .join(' → ')}`,
+          );
+        }
+        for (const q of p.quotedTexts)
+          lines.push(`  · 법원이 다룬 발언: "${q}"`);
+        if (p.summary) lines.push(`  · 판시사항: ${p.summary}`);
+        if (p.refLaws) lines.push(`  · 참조조문: ${p.refLaws}`);
+        if (related) lines.push(`  · 관련 구간: ${related}`);
+        out.push(lines.join('\n'), '');
+      }
+    }
+
+    {
       // 삭제 트랙 — 처벌과 별개로 병행 가능
       const fastLaw = this.laws.article(REMOVAL_TRACK.fast.articleKey);
       const officialLaw = this.laws.article(REMOVAL_TRACK.official.articleKey);
@@ -850,4 +930,10 @@ export class SafeguardAnalysisService {
     }
     return out.join('\n');
   }
+}
+
+/** "2022-07-28" → "2022. 7. 28." (판결 인용 관례) */
+function koreanDate(iso: string | null): string {
+  const m = iso?.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${m[1]}. ${Number(m[2])}. ${Number(m[3])}.` : (iso ?? '');
 }

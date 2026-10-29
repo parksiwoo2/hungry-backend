@@ -8,8 +8,12 @@ import type {
   PrecedentStoreService,
   StoredPrecedentDetail,
 } from '../precedent/storage/precedent-store.service';
+import type { DataSource } from 'typeorm';
 import type { AnalysisTarget } from './precedent-provider';
-import { VectorPrecedentProvider } from './vector-precedent-provider';
+import {
+  VectorPrecedentProvider,
+  type IssueRow,
+} from './vector-precedent-provider';
 
 const target = (id: string, text = `구간 ${id}`): AnalysisTarget => ({
   targetMessageId: id,
@@ -42,6 +46,7 @@ const stored = (over: Partial<StoredPrecedentDetail>): StoredPrecedentDetail =>
 function fakes(
   matchesFor: (targetText: string) => PrecedentMatch[],
   details: Record<string, StoredPrecedentDetail>,
+  issueRows: IssueRow[] = [],
 ) {
   const requests: PrecedentMatchRequest[] = [];
   const matcher = {
@@ -65,7 +70,14 @@ function fakes(
             new NotFoundException('저장된 판례를 찾을 수 없습니다.'),
           ),
   } as unknown as PrecedentStoreService;
-  return { provider: new VectorPrecedentProvider(matcher, store), requests };
+  const db = {
+    query: (_sql: string, [ids]: [string[]]) =>
+      Promise.resolve(issueRows.filter((r) => ids.includes(r.precedent_id))),
+  } as unknown as DataSource;
+  return {
+    provider: new VectorPrecedentProvider(matcher, store, db),
+    requests,
+  };
 }
 
 describe('VectorPrecedentProvider — 팀 판례 검색을 우리 계약으로 변환', () => {
@@ -154,6 +166,7 @@ describe('VectorPrecedentProvider — 팀 판례 검색을 우리 계약으로 �
     const provider = new VectorPrecedentProvider(
       matcher,
       {} as PrecedentStoreService,
+      {} as DataSource,
     );
 
     const out = await provider.match({ analysisTargets: [target('1')] });
@@ -161,6 +174,94 @@ describe('VectorPrecedentProvider — 팀 판례 검색을 우리 계약으로 �
     expect(out).toEqual({
       precedentDict: {},
       analysisTargets: [{ ...target('1'), matchedPrecedentIds: [] }],
+    });
+  });
+
+  describe('describe — 정리 문서에 실을 판례 상세', () => {
+    const row = (over: Partial<IssueRow>): IssueRow => ({
+      precedent_id: '227693',
+      issue_order: 1,
+      evidence_texts: ['너희들도 조심해라.'],
+      finding_order: 1,
+      court_name: '대구지방법원 (원심)',
+      is_guilty_recognized: true,
+      ...over,
+    });
+
+    it('원문 필드와 심급별 결론·법원이 다룬 발언을 모아 돌려준다', async () => {
+      const { provider } = fakes(
+        () => [],
+        {
+          '227693': stored({
+            id: '227693',
+            caseNumber: '2022도4171',
+            caseName: '정보통신망이용촉진및정보보호등에관한법률위반(명예훼손)',
+            judgementDate: '20220728',
+            summary: '[1] 비방할 목적의 의미\n[2] 다른 쟁점',
+            refLaws: '[1] 정보통신망법 제70조 제1항',
+          }),
+        },
+        [
+          row({}),
+          row({
+            finding_order: 2,
+            court_name: '대법원',
+            is_guilty_recognized: false,
+          }),
+          // 두 번째 쟁점 — 발언은 더하고, 결론은 첫 쟁점 것만 쓴다
+          row({
+            issue_order: 2,
+            evidence_texts: ['두 번째 발언', '너희들도 조심해라.'],
+            finding_order: 1,
+            court_name: '대법원',
+            is_guilty_recognized: null,
+          }),
+        ],
+      );
+
+      const out = await provider.describe(['227693']);
+
+      expect(out).toEqual([
+        {
+          id: '227693',
+          caseNumber: '2022도4171',
+          court: '대법원',
+          caseName: '정보통신망이용촉진및정보보호등에관한법률위반(명예훼손)',
+          decidedOn: '2022-07-28',
+          summary: '비방할 목적의 의미',
+          refLaws: '[1] 정보통신망법 제70조 제1항',
+          quotedTexts: ['너희들도 조심해라.', '두 번째 발언'],
+          rulings: [
+            { court: '대구지방법원 (원심)', guilty: true },
+            { court: '대법원', guilty: false },
+          ],
+        },
+      ]);
+    });
+
+    it('사건번호가 없거나 저장소에 없는 판례는 빼고, 입력 순서를 지킨다', async () => {
+      const { provider } = fakes(() => [], {
+        '1': stored({ id: '1', caseNumber: null, summary: '요지' }),
+        '3': stored({ id: '3', caseNumber: '2020도3', summary: '요지 3' }),
+        '4': stored({ id: '4', caseNumber: '2020도4', summary: '요지 4' }),
+      });
+
+      const out = await provider.describe(['4', '1', '2', '3']);
+
+      expect(out.map((d) => d.id)).toEqual(['4', '3']);
+      expect(out[0]).toMatchObject({ quotedTexts: [], rulings: [] });
+    });
+
+    it('조회가 실패하면 빈 목록 — 문서 생성이 판례 때문에 막히지 않는다', async () => {
+      const provider = new VectorPrecedentProvider(
+        {} as PrecedentMatchService,
+        {
+          findOne: () => Promise.reject(new Error('DB 장애')),
+        } as unknown as PrecedentStoreService,
+        {} as DataSource,
+      );
+
+      await expect(provider.describe(['227693'])).resolves.toEqual([]);
     });
   });
 });

@@ -27,7 +27,10 @@ import { ChatsModule } from '../src/chats/chats.module';
 import { ChatLlmService } from '../src/chats/chat-llm.service';
 import { SafeguardAnalysisService } from './../src/safeguard/safeguard-analysis.service';
 import { AnalysesService } from './../src/safeguard/analyses.service';
-import { ReportPdfService } from './../src/safeguard/report-pdf.service';
+import {
+  ReportPdfService,
+  type ReportInput,
+} from './../src/safeguard/report-pdf.service';
 
 const RAW = [
   '2학년 3반 단톡 님과 카카오톡 대화',
@@ -64,6 +67,7 @@ const STUB_RESULT = {
 describe('Safeguard API (e2e)', () => {
   let app: INestApplication<App>;
   let close: (() => Promise<void>) | undefined;
+  let generatePdf: jest.SpyInstance<Promise<Buffer>, [ReportInput]>;
 
   beforeAll(async () => {
     const opened = await openTestDatabase();
@@ -77,10 +81,31 @@ describe('Safeguard API (e2e)', () => {
     })
     class TestDatabaseModule {}
 
+    // 매칭은 하지 않지만, 문서 생성이 참고 판례 상세를 어댑터에서 가져오는지는 본다
+    class StubPrecedentProvider extends NoopPrecedentProvider {
+      describe(ids: string[]) {
+        return Promise.resolve(
+          ids
+            .filter((id) => id === '2003도709')
+            .map((id) => ({
+              id,
+              caseNumber: '2003도709',
+              court: '대법원',
+              caseName: '공갈',
+              decidedOn: '2003-05-13',
+              summary: '공갈죄의 수단으로서 협박의 의미',
+              refLaws: '형법 제350조',
+              quotedTexts: [],
+              rulings: [],
+            })),
+        );
+      }
+    }
+
     @Module({
       providers: [
         { provide: SAFEGUARD_STORE, useValue: store },
-        { provide: PRECEDENT_PROVIDER, useClass: NoopPrecedentProvider },
+        { provide: PRECEDENT_PROVIDER, useClass: StubPrecedentProvider },
       ],
       exports: [SAFEGUARD_STORE, PRECEDENT_PROVIDER],
     })
@@ -120,7 +145,7 @@ describe('Safeguard API (e2e)', () => {
     await app.init();
 
     // jest(CommonJS)는 puppeteer(ESM) 동적 import 를 못 한다 — PDF 생성기만 스텁, 라우트·헤더는 실제
-    jest
+    generatePdf = jest
       .spyOn(app.get(ReportPdfService), 'generate')
       .mockResolvedValue(Buffer.from('%PDF-1.4 stub'));
 
@@ -391,6 +416,15 @@ describe('Safeguard API (e2e)', () => {
         .expect(200)
         .expect('Content-Type', /pdf/);
       expect((pdf.body as Buffer).subarray(0, 4).toString()).toBe('%PDF');
+      // 문서는 한 종류 — legal 구분 없이, 구간이 참고한 판례 상세를 같이 넘긴다
+      const lastCall = generatePdf.mock.calls.at(-1)?.[0] as unknown as Record<
+        string,
+        unknown
+      >;
+      expect(lastCall).not.toHaveProperty('legal');
+      expect(lastCall.precedents).toEqual([
+        expect.objectContaining({ id: '2003도709', caseNumber: '2003도709' }),
+      ]);
 
       await request(app.getHttpServer())
         .delete(`/analyses/${analysisId}`)
