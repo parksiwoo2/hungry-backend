@@ -18,6 +18,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { AnalysesService } from './analyses.service';
+import { CurrentUserId } from '../users/auth.guard';
 import { CreateAnalysisDto } from './dto/analysis.dto';
 
 function toInt(v: string | undefined, fallback: number, max: number): number {
@@ -31,9 +32,13 @@ export class AnalysesController {
   constructor(private readonly analyses: AnalysesService) {}
 
   @Post()
-  async create(@Body() dto: CreateAnalysisDto, @Res() res: Response) {
+  async create(
+    @Body() dto: CreateAnalysisDto,
+    @Res() res: Response,
+    @CurrentUserId() userId: string,
+  ) {
     // 검증 실패(400·404)는 스트림을 열기 전에 보통의 JSON 에러로 나가야 한다
-    const prepared = await this.analyses.prepare(dto);
+    const prepared = await this.analyses.prepare(dto, userId);
 
     res.status(201).set({
       'Content-Type': 'application/x-ndjson; charset=utf-8',
@@ -51,22 +56,30 @@ export class AnalysesController {
   }
 
   @Get()
-  list(@Query('limit') limit?: string, @Query('offset') offset?: string) {
+  list(
+    @CurrentUserId() userId: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
     return this.analyses.list(
       toInt(limit, 20, 100) || 20,
       toInt(offset, 0, Number.MAX_SAFE_INTEGER),
+      userId,
     );
   }
 
   @Get(':analysisId')
-  get(@Param('analysisId') id: string) {
-    return this.analyses.get(id);
+  get(@Param('analysisId') id: string, @CurrentUserId() userId: string) {
+    return this.analyses.get(id, userId);
   }
 
   @Delete(':analysisId')
   @HttpCode(204)
-  async remove(@Param('analysisId') id: string) {
-    await this.analyses.remove(id);
+  async remove(
+    @Param('analysisId') id: string,
+    @CurrentUserId() userId: string,
+  ) {
+    await this.analyses.remove(id, userId);
   }
 
   @Get(':analysisId/report')
@@ -74,8 +87,9 @@ export class AnalysesController {
     @Param('analysisId') id: string,
     @Query('legal') legal: string | undefined,
     @Res() res: Response,
+    @CurrentUserId() userId: string,
   ) {
-    const pdf = await this.analyses.report(id, legal !== 'false');
+    const pdf = await this.analyses.report(id, legal !== 'false', userId);
     const name = `정리문서-${id}.pdf`;
     res.set({
       'Content-Type': 'application/pdf',

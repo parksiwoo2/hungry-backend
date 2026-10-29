@@ -66,8 +66,8 @@ export class ChatsService {
     private readonly llm: ChatLlmService,
   ) {}
 
-  async intro(analysisId: string): Promise<IntroResponse> {
-    const analysis = await this.analyses.get(analysisId); // 없으면 404
+  async intro(analysisId: string, userId: string): Promise<IntroResponse> {
+    const analysis = await this.analyses.get(analysisId, userId); // 없으면 404
     this.assertReady(analysis);
 
     let greeting: string;
@@ -97,9 +97,11 @@ export class ChatsService {
   async sendMessage(
     sessionId: string,
     userMessage: string,
+    userId: string,
   ): Promise<MessageResponse> {
     const session = await this.sessions.findOneBy({ id: sessionId });
     if (!session) throw new NotFoundException('상담 세션 없음');
+    const analysis = await this.analyses.get(session.analysisId, userId);
     if (session.status === ChatSessionStatus.CRISIS_CLOSED) {
       // 상담이 끊긴 사용자가 빈손이 되지 않게 연락처를 같이 준다
       throw new ConflictException({
@@ -112,7 +114,6 @@ export class ChatsService {
       throw new ConflictException('종료된 상담입니다');
     }
 
-    const analysis = await this.analyses.get(session.analysisId);
     const recent = await this.messages.find({
       where: { sessionId },
       order: { seq: 'DESC' },

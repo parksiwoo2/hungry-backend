@@ -94,6 +94,7 @@ export interface AnalysisListResponse {
 
 /** 검증을 통과해 실행만 남은 분석 — 컨트롤러는 이걸 받은 뒤에 스트림을 연다 */
 export interface PreparedAnalysis {
+  userId: string;
   session: SessionRecord;
   input: AnalyzeInput;
   dto: CreateAnalysisDto;
@@ -118,18 +119,22 @@ export class AnalysesService {
    * 세션 존재(404)·피해자 참여 여부(400)를 스트림을 열기 전에 검사한다.
    * 지금은 세션 1개씩만 — 엔진이 대화 하나를 한 문맥(context)으로 보기 때문이다.
    */
-  async prepare(dto: CreateAnalysisDto): Promise<PreparedAnalysis> {
+  async prepare(
+    dto: CreateAnalysisDto,
+    userId: string,
+  ): Promise<PreparedAnalysis> {
     if (dto.sessionIds.length !== 1) {
       throw new BadRequestException(
         '지금은 세션 1개씩만 분석합니다 (여러 자료 동시 분석은 미지원)',
       );
     }
-    const session = await this.sessions.get(dto.sessionIds[0]);
+    const session = await this.sessions.get(dto.sessionIds[0], userId);
     const names = session.participants.map((p) => p.name);
     if (!names.includes(dto.victimName)) {
       throw new BadRequestException('victimName이 세션 참여자에 없음');
     }
     return {
+      userId,
       session,
       dto,
       input: {
@@ -144,13 +149,16 @@ export class AnalysesService {
 
   /** 분석 행을 running 으로 만들고 엔진을 돌린 뒤 done/error 로 닫는다 */
   async run(p: PreparedAnalysis, onStage: StageListener): Promise<RunOutcome> {
-    const { session, input, dto } = p;
-    const analysis = await this.store.createAnalysis({
-      sessionIds: [session.id],
-      context: dto.context,
-      victimName: dto.victimName,
-      participantCount: input.participantCount,
-    });
+    const { session, input, dto, userId } = p;
+    const analysis = await this.store.createAnalysis(
+      {
+        sessionIds: [session.id],
+        context: dto.context,
+        victimName: dto.victimName,
+        participantCount: input.participantCount,
+      },
+      userId,
+    );
     const t0 = Date.now();
     this.logger.log(
       `분석 시작 ${analysis.id} — ${session.messageCount}건 · ${dto.context} · 참여 ${input.participantCount}명`,
@@ -179,7 +187,7 @@ export class AnalysesService {
       this.logger.log(
         `분석 완료 ${analysis.id} — 확정 ${r.flagged.length}건 · 패턴 [${r.patterns.join(',')}] · ${((Date.now() - t0) / 1000).toFixed(1)}초`,
       );
-      return { ok: true, analysis: await this.get(analysis.id) };
+      return { ok: true, analysis: await this.get(analysis.id, userId) };
     } catch (e) {
       const message = e instanceof Error ? e.message : '분석에 실패했습니다';
       await this.store.failAnalysis(analysis.id, message);
@@ -199,19 +207,23 @@ export class AnalysesService {
     );
   }
 
-  async get(id: string): Promise<AnalysisResponse> {
-    const a = await this.store.getAnalysis(id);
+  async get(id: string, userId: string): Promise<AnalysisResponse> {
+    const a = await this.store.getAnalysis(id, userId);
     if (!a) throw new NotFoundException('분석 없음');
     const sessions = new Map<string, SessionRecord>();
     for (const sid of a.sessionIds) {
-      const s = await this.store.getSession(sid);
+      const s = await this.store.getSession(sid, userId);
       if (s) sessions.set(sid, s);
     }
     return AnalysesService.toResponse(a, sessions);
   }
 
-  async list(limit: number, offset: number): Promise<AnalysisListResponse> {
-    const rows = await this.store.listAnalyses(limit, offset);
+  async list(
+    limit: number,
+    offset: number,
+    userId: string,
+  ): Promise<AnalysisListResponse> {
+    const rows = await this.store.listAnalyses(limit, offset, userId);
     const analyses = rows.map((r) => ({
       analysisId: r.id,
       status: r.status,
@@ -225,8 +237,8 @@ export class AnalysesService {
     return { analyses };
   }
 
-  async remove(id: string): Promise<void> {
-    if (!(await this.store.deleteAnalysis(id))) {
+  async remove(id: string, userId: string): Promise<void> {
+    if (!(await this.store.deleteAnalysis(id, userId))) {
       throw new NotFoundException('분석 없음');
     }
   }
@@ -235,13 +247,13 @@ export class AnalysesService {
    * 정리 문서 PDF. 제외(excluded)된 구간은 빼고, 집계는 남은 구간으로 다시 센다.
    * legal=false 면 법조·판례·대응 절차 없이 사실 정리만 싣는다.
    */
-  async report(id: string, legal: boolean): Promise<Buffer> {
-    const a = await this.store.getAnalysis(id);
+  async report(id: string, legal: boolean, userId: string): Promise<Buffer> {
+    const a = await this.store.getAnalysis(id, userId);
     if (!a) throw new NotFoundException('분석 없음');
     if (a.status !== 'done') {
       throw new ConflictException(`분석이 끝나지 않았습니다 (${a.status})`);
     }
-    const session = await this.sessions.get(a.sessionIds[0]);
+    const session = await this.sessions.get(a.sessionIds[0], userId);
     const flagged = a.utterances
       .filter((u) => !u.excluded)
       .map((u) => AnalysesService.toFlagged(u));

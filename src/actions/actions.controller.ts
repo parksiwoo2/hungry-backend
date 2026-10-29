@@ -1,5 +1,6 @@
 import { Controller, Get, Param } from '@nestjs/common';
 import { ActionsService } from './actions.service';
+import { CurrentUserId } from '../users/auth.guard';
 import { Action } from './interfaces/action.interface';
 
 @Controller('analyses')
@@ -13,7 +14,8 @@ export class ActionsController {
   @Get(':analysisId/actions')
   async mapActionsByAnalysis(
     @Param('analysisId') analysisId: string,
+    @CurrentUserId() userId: string,
   ): Promise<{ actions: Action[] }> {
-    return this.actionsService.mapActionsByAnalysis(analysisId);
+    return this.actionsService.mapActionsByAnalysis(analysisId, userId);
   }
 }

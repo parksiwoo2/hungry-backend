@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { AddDataOwners20261029000000 } from './migrations/20261029000000-add-data-owners';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { PrecedentModule } from './precedent/precedent.module';
@@ -32,6 +33,7 @@ import { ChatsModule } from './chats/chats.module';
           CreateUsers20260922000000,
           CreateSafeguardTables20261005000000,
           CreateChatTables20261011000000,
+          AddDataOwners20261029000000,
         ],
         migrationsRun: true,
       }),
