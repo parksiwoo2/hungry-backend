@@ -527,7 +527,6 @@
         top.className = "card-top";
         top.append(
           createTextElement("span", "case-number", result.caseNumber || `판례 ${result.precedentId}`),
-          createTextElement("span", "score", `종합 ${(result.score.overall * 100).toFixed(1)}%`),
         );
 
         const meta = document.createElement("div");
@@ -537,7 +536,6 @@
           createTextElement("span", "", "·"),
           createTextElement("span", "", formatDate(result.judgementDate)),
           createTextElement("span", "", "·"),
-          createTextElement("span", "", `벡터 ${(result.score.vector * 100).toFixed(1)}%`),
         );
 
         card.append(
@@ -566,7 +564,7 @@
         elements.status.textContent = "판례를 검색하고 있습니다…";
 
         try {
-          const response = await fetch(`${API_BASE_URL}/precedent/search`, {
+          const response = await fetch(`${API_BASE_URL}/precedents/search`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -692,9 +690,10 @@
         window.scrollTo({ top: 0, behavior: "smooth" });
 
         try {
-          const response = await fetch(`${API_BASE_URL}/precedent/stored/${encodeURIComponent(result.precedentId)}`);
+          const response = await fetch(`${API_BASE_URL}/precedents/${encodeURIComponent(result.precedentId)}`);
           if (!response.ok) throw new Error(await readError(response));
-          renderDetail(result, await response.json());
+          const body = await response.json();
+          renderDetail(result, body.precedent);
         } catch (error) {
           elements.detailContent.replaceChildren(createTextElement("div", "error-box", error.message));
         }

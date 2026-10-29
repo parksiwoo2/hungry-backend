@@ -15,8 +15,8 @@ import { PrecedentMatchService } from './search/precedent-match.service';
 import { PrecedentModelQueryService } from './storage/precedent-model-query.service';
 import { PrecedentStoreService } from './storage/precedent-store.service';
 
-@Controller('precedent')
-export class PrecedentController {
+@Controller('precedents')
+export class PrecedentsController {
   constructor(
     private readonly precedentService: PrecedentService,
     private readonly precedentStoreService: PrecedentStoreService,
@@ -102,8 +102,8 @@ export class PrecedentController {
     });
   }
 
-  @Get(':id')
-  getPrecedent(@Param('id', ParseIntPipe) id: number) {
-    return this.precedentService.getPrecedent(id);
+  @Get(':precedentId')
+  getPrecedent(@Param('precedentId') precedentId: string) {
+    return this.precedentModelQueryService.findDetail(precedentId);
   }
 }

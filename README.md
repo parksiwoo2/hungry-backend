@@ -1,5 +1,7 @@
 # HTTP API 목록
 
+요청·응답 예시, 인증, 오류, 업로드 → 분석 → 상담 순서는 [API 상세 명세](API.md)를 참고하세요. 현재 구현 기준이며 배포 실행 방법은 이 문서 아래에 유지합니다.
+
 ## 인증·사용자
 
 | 메서드 | 경로           | 설명                               |
@@ -13,16 +15,16 @@
 
 ## 판례
 
-| 메서드 | 경로                           | 설명                                              |
-| ------ | ------------------------------ | ------------------------------------------------- |
-| GET    | `/precedent`                   | 외부 API에서 판례 목록 조회                       |
-| GET    | `/precedent/:id`               | 외부 API에서 판례 상세 조회                       |
-| GET    | `/precedent/stored/categories` | 판례 수집 분류와 검색어 목록 조회                 |
-| GET    | `/precedent/stored`            | DB에 저장된 판례 목록 조회                        |
-| GET    | `/precedent/stored/:id`        | DB에 저장된 판례 상세 조회                        |
-| POST   | `/precedent/search`            | 자연어·키워드 하이브리드 판례 검색                |
-| POST   | `/precedent/match`             | 증거 내용과 법적 맥락으로 관련 판례 최대 3개 매칭 |
-| GET    | `/precedent/models/:model`     | 판례 관련 모델별 저장 데이터 조회                 |
+| 메서드 | 경로                            | 설명                                              |
+| ------ | ------------------------------- | ------------------------------------------------- |
+| GET    | `/precedents`                   | 외부 API에서 판례 목록 조회                       |
+| GET    | `/precedents/:precedentId`      | 저장 판례·쟁점·법원 판단 상세 조회                |
+| GET    | `/precedents/stored/categories` | 판례 수집 분류와 검색어 목록 조회                 |
+| GET    | `/precedents/stored`            | DB에 저장된 판례 목록 조회                        |
+| GET    | `/precedents/stored/:id`        | DB에 저장된 판례 상세 조회                        |
+| POST   | `/precedents/search`            | 자연어·키워드 하이브리드 판례 검색                |
+| POST   | `/precedents/match`             | 증거 내용과 법적 맥락으로 관련 판례 최대 3개 매칭 |
+| GET    | `/precedents/models/:model`     | 판례 관련 모델별 저장 데이터 조회                 |
 
 ## 대화 자료
 
@@ -55,8 +57,8 @@
 | 메서드 | 경로                            | 설명                                         |
 | ------ | ------------------------------- | -------------------------------------------- |
 | GET    | `/`                             | 테스트용 웹 화면 제공                        |
-| POST   | `/precedent/search`             | 자연어·키워드 하이브리드 판례 검색           |
-| GET    | `/precedent/:id`                | 외부 API에서 판례 상세 조회                  |
+| POST   | `/precedents/search`            | 자연어·키워드 하이브리드 판례 검색           |
+| GET    | `/precedents/:precedentId`      | 저장 판례·쟁점·법원 판단 상세 조회           |
 | POST   | `/analyses`                     | 대화 AI 분석 실행 및 진행 상황·결과 스트리밍 |
 | GET    | `/analyses`                     | 저장된 분석 목록 조회                        |
 | GET    | `/analyses/:analysisId`         | 분석 상태와 상세 결과 조회                   |
@@ -110,7 +112,7 @@ Store판에서 인증하고 winget판으로 실행하는 이 PC에서는 아래 
 ### 3. 앱 연결 설정
 
 - API Base URL: `https://dropkick-unclaimed-upscale.ngrok-free.dev` (실행 시 Forwarding 주소 확인)
-- 요청 예: `POST {Base URL}/precedent/search`, `POST {Base URL}/sessions`, `POST {Base URL}/analyses`
+- 요청 예: `POST {Base URL}/precedents/search`, `POST {Base URL}/sessions`, `POST {Base URL}/analyses`
 - 경로에 `/api`를 붙이지 않습니다. 실제 기기의 `localhost`는 기기 자신이므로 서버 주소로 사용하지 않습니다.
 - JSON 요청은 `Content-Type: application/json`을 사용합니다. ngrok 안내 HTML을 방지하려면 `ngrok-skip-browser-warning: true` 헤더를 추가합니다.
 - 로그인 응답의 `Set-Cookie`를 앱 HTTP 클라이언트의 쿠키 저장소에 보관하고, 이후 같은 서버 요청에 쿠키를 전송합니다. HTTPS용 세션 쿠키를 사용하므로 HTTPS Base URL을 유지합니다.

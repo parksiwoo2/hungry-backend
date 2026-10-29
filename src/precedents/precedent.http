@@ -2,62 +2,62 @@
 
 ### Entity 1: PrecedentEntity / precedents
 
-GET {{baseUrl}}/precedent/models/precedents?page=1&limit=5
+GET {{baseUrl}}/precedents/models/precedents?page=1&limit=5
 Accept: application/json
 
 ### Entity 2: PrecedentAnalysisEntity / precedent_analyses
 
-GET {{baseUrl}}/precedent/models/precedent-analyses?page=1&limit=5&precedentId=239161
+GET {{baseUrl}}/precedents/models/precedent-analyses?page=1&limit=5&precedentId=239161
 Accept: application/json
 
 ### Entity 3: PrecedentAnalysisIssueEntity / precedent_analysis_issues
 
-GET {{baseUrl}}/precedent/models/precedent-analysis-issues?page=1&limit=5&precedentId=239161
+GET {{baseUrl}}/precedents/models/precedent-analysis-issues?page=1&limit=5&precedentId=239161
 Accept: application/json
 
 ### Entity 4: PrecedentIssueFindingEntity / precedent_issue_findings
 
-GET {{baseUrl}}/precedent/models/precedent-issue-findings?page=1&limit=5
+GET {{baseUrl}}/precedents/models/precedent-issue-findings?page=1&limit=5
 Accept: application/json
 
 ### Entity 5: PrecedentIssueEmbeddingEntity / precedent_issue_embeddings
 
-GET {{baseUrl}}/precedent/models/precedent-issue-embeddings?page=1&limit=5
+GET {{baseUrl}}/precedents/models/precedent-issue-embeddings?page=1&limit=5
 Accept: application/json
 
 ### Entity 6: PrecedentSearchDocumentEntity / precedent_search_documents
 
-GET {{baseUrl}}/precedent/models/precedent-search-documents?page=1&limit=5&precedentId=239161
+GET {{baseUrl}}/precedents/models/precedent-search-documents?page=1&limit=5&precedentId=239161
 Accept: application/json
 
 ### External API list search
 
-GET {{baseUrl}}/precedent?query=싸이월드%20괴롭히기&search=2&display=10&page=1&sort=ddes
+GET {{baseUrl}}/precedents?query=싸이월드%20괴롭히기&search=2&display=10&page=1&sort=ddes
 Accept: application/json
 
 ###
 
-GET {{baseUrl}}/precedent/69048
+GET {{baseUrl}}/precedents/69048
 Accept: application/json
 
 ###
 
-GET {{baseUrl}}/precedent/stored?page=1&limit=20
+GET {{baseUrl}}/precedents/stored?page=1&limit=20
 Accept: application/json
 
 ###
 
-GET {{baseUrl}}/precedent/stored/69048
+GET {{baseUrl}}/precedents/stored/69048
 Accept: application/json
 
 ###
 
-GET {{baseUrl}}/precedent/stored/categories
+GET {{baseUrl}}/precedents/stored/categories
 Accept: application/json
 
 ###
 
-POST {{baseUrl}}/precedent/match
+POST {{baseUrl}}/precedents/match
 Content-Type: application/json
 
 {
@@ -75,7 +75,7 @@ Content-Type: application/json
 
 ###
 
-POST {{baseUrl}}/precedent/search
+POST {{baseUrl}}/precedents/search
 Content-Type: application/json
 
 {
@@ -88,7 +88,7 @@ Content-Type: application/json
 
 ###
 
-POST {{baseUrl}}/precedent/search
+POST {{baseUrl}}/precedents/search
 Content-Type: application/json
 
 {
