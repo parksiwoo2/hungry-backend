@@ -59,6 +59,18 @@ export interface AnalyzeInput {
   victimInRoom: boolean; // 피해자가 그 방 구성원인가 (학폭 도달성 요건)
 }
 
+// ── 피해 유형 — 1차의 후보 유형과 2차의 판정이 같은 enum 을 쓴다 ──────────
+const HarmType = z.enum([
+  '언어폭력',
+  '명예훼손',
+  '모욕',
+  '성희롱',
+  '협박',
+  '스토킹',
+  '집단따돌림',
+  '갈취강요',
+]);
+
 // ── 1차 선별 스키마 — 단위는 "구간"(같은 행위를 이루는 메시지 묶음) ──────
 const Segment = z.object({
   messageNos: z
@@ -72,6 +84,11 @@ const Segment = z.object({
     .string()
     .describe(
       '누가 무엇을 어떤 순서로 했는지 사실만 한두 문장. 죄명·유형 단어 금지. 판례 검색 질의로도 쓰임',
+    ),
+  candidateTypes: z
+    .array(HarmType)
+    .describe(
+      '판례 검색 범위용 후보 유형. 판정이 아니므로 해당할 수 있는 것을 넉넉히. 빈 배열 가능',
     ),
 });
 const PatternName = z.enum([
@@ -93,16 +110,6 @@ export type ScreenedSegment = z.infer<typeof Segment>;
 export type Screening = z.infer<typeof ScreeningResult>;
 
 // ── 2차 판단 스키마 ───────────────────────────────────────────────────
-const HarmType = z.enum([
-  '언어폭력',
-  '명예훼손',
-  '모욕',
-  '성희롱',
-  '협박',
-  '스토킹',
-  '집단따돌림',
-  '갈취강요',
-]);
 const Severity = z.enum(['관찰', '주의', '즉시조치']); // 점수 아님(구간)
 
 const Judged = z.object({
@@ -189,11 +196,19 @@ const SYSTEM_SCREEN = `너는 한국 사이버폭력 대화의 1차 선별기다
 - messageNos: 구간에 속한 가해 발화의 번호들 (오름차순)
 - victimIdentifiable: 피해자가 식별되는가.
   이름·2인칭·멘션뿐 아니라 "어떤 애가" 식의 맥락 지목도 식별로 본다.
-- summary: 이 구간에서 누가 무엇을 어떤 순서로 했는지 한두 문장으로 요약하라.
+- summary: 이 구간에서 누가 무엇을 어떤 순서로 했는지 두세 문장으로 요약하라.
   다음 단계는 대화 전체를 보지 못하므로 직전의 거부 의사, 쌍방 언쟁 여부, 반복 회차,
-  상대의 반응을 담아라. 이 요약은 판례 검색 질의로도 쓰이니 행위·수단·반복을 구체적으로 적어라.
-  죄명·유형 단어(협박, 모욕, 셔틀 등)를 쓰지 마라. 관찰된 사실만 기술하라.
+  상대의 반응을 담아라.
+  이 요약은 판례 검색 질의로 쓰인다. 판결문의 사실관계 문체로 써라 —
+  행위자 수와 피해자와의 관계, 매체(단체 대화방·1:1 메시지), 요구하거나 말한 내용,
+  응하지 않으면 생길 불이익으로 고지한 것, 횟수·기간, 상대의 반응을 명사 위주로.
+  구어·은어는 뜻을 풀어 써라 (예: "셔틀 시킴" → "대신 결제·심부름을 하게 함",
+  "꼰지르면" → "교사·보호자에게 알리면", "뿌린다" → "다수에게 유포하겠다고 함").
+  죄명·유형 단어(협박, 모욕, 명예훼손, 셔틀 등)는 여전히 쓰지 마라. 관찰된 사실만 기술하라.
   판정은 다음 단계의 일이고, 네 요약에 판정이 섞이면 다음 단계가 그것에 끌려간다.
+- candidateTypes: 이 구간이 해당할 수 있는 유형을 넉넉히 골라라. 판정이 아니라
+  판례를 어느 죄명에서 찾을지 정하는 범위다. 다음 단계에는 전달되지 않는다.
+  확신이 없으면 둘 이상을 넣고, 전혀 모르겠으면 비워라.
 
 ## patterns — 대화 전체에서 관찰된 집단 괴롭힘 패턴
 - 방폭: 피해자 초대 직후 다수 동시 퇴장
@@ -209,8 +224,11 @@ const SYSTEM_JUDGE = `너는 사이버폭력 후보 구간의 2차 판단자다.
 그 사이·전후의 피해자 응답 등 맥락이다. 1차의 요약은 참고일 뿐이다 — 판단은 원문을 직접 읽고 하라.
 
 ## 판례 사용 규칙
-- 판례는 유사도 순 후보일 뿐 적용을 보증하지 않는다. 사안과 무관하면 버려라.
-- 실제 판단의 근거로 삼은 판례만 appliedPrecedentIds에 넣어라. 없으면 빈 배열.
+- 판례는 유사도 순 후보일 뿐 적용을 보증하지 않는다. 유형이 다르거나 사실관계가
+  동떨어진 판례만 버려라.
+- 사실관계(수단·대상·반복·공연성)가 닮아 기준을 보여주는 판례는 appliedPrecedentIds에
+  넣어라. 결론이 유죄든 무죄든 상관없다 — 어디까지 죄가 되는지 보여주는 것도 근거다.
+  구간당 최대 2개, 가장 닮은 것부터. 없으면 빈 배열.
 - 적합한 판례가 없어도 명백히 유해한 행위는 아래 기준으로 판단하라.
 - appliedPrecedentIds에는 제공된 판례 사전의 ID만 넣어라. 사건번호와 혼동하거나 새 ID를 지어내지 마라.
 
@@ -420,6 +438,20 @@ export class SafeguardAnalysisService {
       return list.filter((x) => allowed.has(String(x)));
     };
     if ('patterns' in v) v.patterns = keep(v.patterns, PATTERN_SET, '패턴');
+    // 1차의 후보 유형 — 검색 범위일 뿐이라 정의 밖 값은 조용히 버리고 구간은 남긴다
+    if (Array.isArray(v.segments)) {
+      for (const seg of v.segments as unknown[]) {
+        if (!seg || typeof seg !== 'object') continue;
+        const item = seg as Record<string, unknown>;
+        if ('candidateTypes' in item) {
+          item.candidateTypes = keep(
+            item.candidateTypes,
+            HARM_SET,
+            '후보 유형',
+          );
+        }
+      }
+    }
     if (Array.isArray(v.judged)) {
       v.judged = v.judged.filter((j: unknown) => {
         if (!j || typeof j !== 'object') return true; // 스키마 검증에 맡김
@@ -474,6 +506,7 @@ export class SafeguardAnalysisService {
       return {
         targetMessageId: SafeguardAnalysisService.segmentId(seg.messageNos),
         targetText: [seg.summary, ...lines].join('\n'),
+        candidateTypes: seg.candidateTypes ?? [], //  1차 AI가 채움 (검색 범위)
         legalContext: {
           isGroupChat: input.context !== 'dm', //       코드가 채움 (방 정보)
           audienceCount: input.participantCount, //     코드가 채움 (방 정보)

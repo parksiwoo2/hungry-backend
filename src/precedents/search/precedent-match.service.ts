@@ -65,8 +65,26 @@ export class PrecedentMatchService {
     target: PrecedentAnalysisTarget,
     embedding: number[],
   ): Promise<PrecedentMatch[]> {
+    const filtered = await this.searchRows(
+      target,
+      embedding,
+      target.crimeTypePattern ?? null,
+    );
+    // 죄명 필터에 걸리는 판례가 없으면 필터 없이 — 판례 없이 끝나는 것보다 낫다
+    const rows =
+      filtered.length === 0 && target.crimeTypePattern
+        ? await this.searchRows(target, embedding, null)
+        : filtered;
+    return rows.map((row) => this.toMatch(row));
+  }
+
+  private async searchRows(
+    target: PrecedentAnalysisTarget,
+    embedding: number[],
+    crimeTypePattern: string | null,
+  ): Promise<MatchRow[]> {
     const vector = `[${embedding.join(',')}]`;
-    const rows = await this.dataSource.query<MatchRow[]>(
+    return this.dataSource.query<MatchRow[]>(
       `
         WITH finding_data AS (
           SELECT
@@ -108,7 +126,11 @@ export class PrecedentMatchService {
             pai.crime_types,
             pai.keywords,
             fd.court_findings,
-            GREATEST(0, 1 - (pie.fact_embedding <=> $1::vector)) AS semantic_score,
+            -- 사실 벡터만 쓰면 죄명이 다른 판례가 붙는다. 법리 벡터(죄명·법리·판단)를 섞는다
+            (
+              GREATEST(0, 1 - (pie.fact_embedding <=> $1::vector)) * 0.7 +
+              GREATEST(0, 1 - (pie.rule_embedding <=> $1::vector)) * 0.3
+            ) AS semantic_score,
             CASE
               WHEN pai.is_group_chat IS NULL THEN 0.5
               WHEN pai.is_group_chat = $2 THEN 1.0
@@ -138,6 +160,7 @@ export class PrecedentMatchService {
           INNER JOIN precedents p ON p.external_id = pai.precedent_id
           INNER JOIN finding_data fd ON fd.issue_id = pai.id
           WHERE pa.status = 'complete'
+            AND ($5::text IS NULL OR array_to_string(pai.crime_types, ' ') ~ $5::text)
         ), context_scores AS (
           SELECT
             base_scores.*,
@@ -176,10 +199,13 @@ export class PrecedentMatchService {
         target.legalContext.isGroupChat,
         target.legalContext.victimIdentifiable,
         target.legalContext.audienceCount,
+        crimeTypePattern,
       ],
     );
+  }
 
-    return rows.map((row) => ({
+  private toMatch(row: MatchRow): PrecedentMatch {
+    return {
       precedentId: row.precedent_id,
       issueId: row.issue_id,
       issueOrder: row.issue_order,
@@ -205,7 +231,7 @@ export class PrecedentMatchService {
         context: this.roundScore(row.context_score),
         decisionUsefulness: this.roundScore(row.decision_usefulness_score),
       },
-    }));
+    };
   }
 
   private validateRequest(body: unknown): PrecedentMatchRequest {
@@ -280,6 +306,18 @@ export class PrecedentMatchService {
       );
     }
 
+    const crimeTypePattern = target.crimeTypePattern;
+    if (
+      crimeTypePattern !== undefined &&
+      (typeof crimeTypePattern !== 'string' ||
+        crimeTypePattern.trim().length < 1 ||
+        crimeTypePattern.length > 200)
+    ) {
+      throw new BadRequestException(
+        `analysisTargets[${index}].crimeTypePattern은 1자부터 200자까지의 문자열이어야 합니다.`,
+      );
+    }
+
     return {
       targetText: targetText.trim(),
       legalContext: {
@@ -287,6 +325,9 @@ export class PrecedentMatchService {
         audienceCount: context.audienceCount as number,
         victimIdentifiable: context.victimIdentifiable,
       },
+      ...(crimeTypePattern
+        ? { crimeTypePattern: crimeTypePattern.trim() }
+        : {}),
     };
   }
 

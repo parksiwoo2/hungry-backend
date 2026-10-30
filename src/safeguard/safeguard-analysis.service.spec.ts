@@ -48,11 +48,14 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
           messageNos: [6],
           victimIdentifiable: true,
           summary: '조건을 걸어 위해를 예고',
+          candidateTypes: ['협박'],
         },
       ],
       patterns: [],
     });
     expect(targets).toHaveLength(2);
+    // 1차의 후보 유형은 판례 검색 범위로만 쓰인다 (2차 프롬프트에는 들어가지 않음)
+    expect(targets[1].candidateTypes).toEqual(['협박']);
     expect(targets[0].targetMessageId).toBe('3,4,5');
     expect(targets[0].targetText).toBe(
       '응답 없는 상대에게 심야에 연속 전송\n자냐\n답장해라\n무시하냐 진짜',
@@ -286,5 +289,24 @@ describe('SafeguardAnalysisService — 구간 단위 로직', () => {
         'low',
       ),
     ).rejects.toThrow(/1차 선별 출력이 토큰 한도.*잘림/);
+  });
+
+  it('dropInvalidEnumValues: 1차 candidateTypes 의 enum 밖 값도 걷어낸다 (실측: "강요"로 분석 전체가 실패)', () => {
+    const engine = new SafeguardAnalysisService(new NoopPrecedentProvider());
+    type Drop = (label: string, v: unknown) => unknown;
+    const priv = engine as unknown as { dropInvalidEnumValues: Drop };
+    const drop: Drop = (label, v) => priv.dropInvalidEnumValues(label, v);
+
+    const out = drop('1차 선별', {
+      segments: [
+        { messageNos: [1], candidateTypes: ['강요', '협박', '공갈'] },
+        { messageNos: [2], candidateTypes: ['모욕'] },
+      ],
+      patterns: ['떼카', '카톡감옥'],
+    }) as { segments: { candidateTypes: string[] }[]; patterns: string[] };
+
+    expect(out.segments[0].candidateTypes).toEqual(['협박']);
+    expect(out.segments[1].candidateTypes).toEqual(['모욕']);
+    expect(out.patterns).toEqual(['떼카']);
   });
 });
